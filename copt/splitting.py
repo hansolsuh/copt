@@ -1,9 +1,27 @@
 import warnings
 import numpy as np
+from numpy.linalg import norm
+from numpy import dot
 from scipy import optimize, linalg, sparse
+import matplotlib.pyplot as plt
 
 from . import utils
 
+def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv):
+#    import pdb
+#    pdb.set_trace()
+    n = Hinv.size
+    param = (sk*yk+mu*Hinv)/(yk*yk+mu)
+    for i in range(0,n):
+        if param[i] < a_bb2:
+            Hinv[i] = a_bb2
+        elif param[i] > a_bb1:
+            Hinv[i] = a_bb1
+        else:
+            Hinv[i] = param[i]
+#    import pdb
+#    pdb.set_trace()
+    return;
 
 def minimize_three_split(
     f_grad,
@@ -19,6 +37,10 @@ def minimize_three_split(
     max_iter_backtracking=100,
     backtracking_factor=0.7,
     h_Lipschitz=None,
+    barrier=None,
+    hcopt=None,
+    Hinv=None,
+    temp=None,
     args_prox=(),
 ):
     """Davis-Yin three operator splitting method.
@@ -78,6 +100,10 @@ def minimize_three_split(
       h_Lipschitz : float, optional
         If given, h is assumed to be Lipschitz continuous with constant h_Lipschitz.
 
+      barrier : float, optional
+        Barrier parameter for Interior Point Method. 
+        If given, it will decrease when tolerance is met for the certificate
+
 
     Returns:
       res : OptimizeResult
@@ -113,6 +139,13 @@ def minimize_three_split(
         def prox_2(x, s, *args):
             return x
 
+    n = x0.size
+    VM_trigger = 1
+
+    if Hinv is None:
+        Hinv = np.ones(n)
+        VM_trigger = 0
+
     if step_size is None:
         line_search = True
         step_size = 1.0 / utils.init_lipschitz(f_grad, x0)
@@ -121,13 +154,77 @@ def minimize_three_split(
     LS_EPS = np.finfo(np.float).eps
 
     fk, grad_fk = f_grad(z)
+    x_old = x0
     x = prox_1(z - step_size * grad_fk, step_size, *args_prox)
     u = np.zeros_like(x)
 
-    for it in range(max_iter):
+    delta = 2
+    mu    = 1000000 #TODO large mu for static hessian. how large?
+    C     = 10
+    r     = 1
 
+    aa_list = []
+    a1_list = []
+    a2_list = []
+    temp_list = []
+    Hinv_avglist = []
+
+    for it in range(max_iter):
+#            import pdb
+#            pdb.set_trace()
+
+        grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
-        x = prox_1(z - step_size * (u + grad_fk), step_size, *args_prox)
+
+        x_old = x
+        x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
+
+        if VM_trigger and it > 1: 
+            sk = x - x_old
+            yk = grad_fk - grad_fk_old #TODO grad_f(x) not z?
+            hk = C + np.max(-dot(sk,yk)/(norm(sk)**2),0)*(norm(grad_fk_old)**(-r))
+            ybar = yk + hk*(norm(grad_fk_old)**r)*sk
+            aaa  = dot(sk,ybar)/norm(sk)**2
+            aa_list.append(aaa)
+
+            if it > 0:
+                a_bb1 = dot(yk,yk)/(2*dot(sk,sk))
+                a_bb2 = dot(yk,yk)/dot(sk,yk)
+                a1_list.append(a_bb1)
+                a2_list.append(a_bb2)
+                Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
+
+#                Hinv.fill(aaa)
+
+                Hinv_avglist.append(np.average(Hinv))
+
+        if it == 50 and VM_trigger:
+            Hinv.fill(1)
+            VM_trigger = None
+
+        fvvv = temp(x)
+        temp_list.append(fvvv)
+
+        if it >= 50:
+            if it % 10 == 0:
+                fff,axx = plt.subplots(2,3,sharey=False)
+                axx[0,0].plot(Hinv)
+                axx[0,0].set_title('Hinv')
+                axx[0,1].plot(temp_list)
+                axx[0,1].set_title('func eval')
+                axx[0,1].set_yscale('log')
+                axx[0,2].imshow(x.reshape(50,50))
+                axx[1,1].plot(a1_list)
+                axx[1,1].set_title('a_bb1 history')
+                axx[1,2].plot(a2_list)
+                axx[1,2].set_title('a_bb2 history')
+                axx[1,0].plot(Hinv_avglist)
+                axx[1,0].set_title('history of avg of Hinv vector')
+                plt.show()
+                import pdb
+                pdb.set_trace()
+        
+
         incr = x - z
         norm_incr = np.linalg.norm(incr)
         ls = norm_incr > 1e-7 and line_search
@@ -158,11 +255,19 @@ def minimize_three_split(
         if callback is not None:
             if callback(locals()) is False:
                 break
-
+   
         if it > 0 and certificate < tol:
-            success = True
-            break
-
+            if barrier != None:
+                if barrier > 1.e-12:
+                    barrier /= 1.1
+            else:                
+                success = True
+                break
+            
+#    plt.plot(temp_list)
+#    plt.show()
+#    import pdb
+#    pdb.set_trace()
     return optimize.OptimizeResult(
         x=x, success=success, nit=it, certificate=certificate, step_size=step_size
     )
@@ -181,6 +286,7 @@ def minimize_primal_dual(
     step_size2=None,
     line_search=True,
     max_iter_ls=20,
+    barrier=None,
     verbose=0,
 ):
     """Primal-dual hybrid gradient splitting method.
@@ -322,13 +428,16 @@ def minimize_primal_dual(
         fk, grad_fk = f_next, f_grad_next
 
         if norm_incr < tol:
-            success = True
-            break
+            if barrier != None:
+                if barrier > 1.e-12:
+                    barrier /= 1.1
+            else:
+                success = True
+                break
 
         if callback is not None:
             if callback(locals()) is False:
                 break
-
     if it >= max_iter:
         warnings.warn(
             "proximal_gradient did not reach the desired tolerance level",
