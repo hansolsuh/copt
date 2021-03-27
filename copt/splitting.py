@@ -13,10 +13,10 @@ def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv):
     n = Hinv.size
     param = (sk*yk+mu*Hinv)/(yk*yk+mu)
     for i in range(0,n):
-        if param[i] < a_bb2:
-            Hinv[i] = a_bb2
-        elif param[i] > a_bb1:
+        if param[i] < a_bb1:
             Hinv[i] = a_bb1
+        elif param[i] > a_bb2:
+            Hinv[i] = a_bb2
         else:
             Hinv[i] = param[i]
 #    import pdb
@@ -34,13 +34,14 @@ def minimize_three_split(
     callback=None,
     line_search=True,
     step_size=None,
+    L_Lip=None,
     max_iter_backtracking=100,
     backtracking_factor=0.7,
     h_Lipschitz=None,
     barrier=None,
     hcopt=None,
     Hinv=None,
-    temp=None,
+    total_func=None,
     args_prox=(),
 ):
     """Davis-Yin three operator splitting method.
@@ -150,6 +151,9 @@ def minimize_three_split(
         line_search = True
         step_size = 1.0 / utils.init_lipschitz(f_grad, x0)
 
+    import pdb
+    pdb.set_trace()
+    z_old = x0
     z = prox_2(x0, step_size, *args_prox)
     LS_EPS = np.finfo(np.float).eps
 
@@ -166,8 +170,10 @@ def minimize_three_split(
     aa_list = []
     a1_list = []
     a2_list = []
-    temp_list = []
     Hinv_avglist = []
+    Fval_list = []
+    M_ls = 5
+    b_ls = 1.1
 
     for it in range(max_iter):
 #            import pdb
@@ -176,16 +182,11 @@ def minimize_three_split(
         grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
 
-        x_old = x
-        x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
 
         if VM_trigger and it > 1: 
             sk = x - x_old
             yk = grad_fk - grad_fk_old #TODO grad_f(x) not z?
             hk = C + np.max(-dot(sk,yk)/(norm(sk)**2),0)*(norm(grad_fk_old)**(-r))
-            ybar = yk + hk*(norm(grad_fk_old)**r)*sk
-            aaa  = dot(sk,ybar)/norm(sk)**2
-            aa_list.append(aaa)
 
             if it > 0:
                 a_bb1 = dot(yk,yk)/(2*dot(sk,sk))
@@ -193,37 +194,47 @@ def minimize_three_split(
                 a1_list.append(a_bb1)
                 a2_list.append(a_bb2)
                 Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
-
-#                Hinv.fill(aaa)
-
-                Hinv_avglist.append(np.average(Hinv))
-
-        if it == 50 and VM_trigger:
-            Hinv.fill(1)
-            VM_trigger = None
-
-        fvvv = temp(x)
-        temp_list.append(fvvv)
-
-        if it >= 50:
-            if it % 10 == 0:
-                fff,axx = plt.subplots(2,3,sharey=False)
-                axx[0,0].plot(Hinv)
-                axx[0,0].set_title('Hinv')
-                axx[0,1].plot(temp_list)
-                axx[0,1].set_title('func eval')
-                axx[0,1].set_yscale('log')
-                axx[0,2].imshow(x.reshape(50,50))
-                axx[1,1].plot(a1_list)
-                axx[1,1].set_title('a_bb1 history')
-                axx[1,2].plot(a2_list)
-                axx[1,2].set_title('a_bb2 history')
-                axx[1,0].plot(Hinv_avglist)
-                axx[1,0].set_title('history of avg of Hinv vector')
-                plt.show()
-                import pdb
-                pdb.set_trace()
+##                Hinv_avglist.append(np.average(Hinv))
         
+#        if L_Lip is not None:
+#            Hinv[Hinv<L_Lip] = L_Lip
+#
+#        x_old = x
+#        x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
+#        total_eval = total_func(x)
+#
+#        ls_it = 0
+#
+#        if len(Fval_list) < M_ls:
+#            Fval_list.append(total_eval)
+#        else:
+#            del Fval_list[0]
+#            Fval_list.append(total_eval)
+#
+#        while True and it>1 and VM_trigger: #TODO make breakable? trigger?
+#            Hinv *= b_ls
+#            x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
+#            total_eval = total_func(x)
+#
+#            
+#            xdiff = x-x_old
+##            if total_eval <= max(Fval_list) - dot(Hinv*xdiff, xdiff):
+#            if total_eval <= max(Fval_list) - dot(Hinv*xdiff, xdiff):
+#                print(ls_it)
+#                break
+#            ls_it += 1
+#
+#            if ls_it > 1000:
+##                Hinv.fill(1)
+##                VM_trigger = None
+##                print(it)
+#                break
+
+
+#
+##        if it == 100 and VM_trigger:
+##            Hinv.fill(1)
+##            VM_trigger = None
 
         incr = x - z
         norm_incr = np.linalg.norm(incr)
@@ -240,9 +251,16 @@ def minimize_three_split(
                 else:
                     step_size *= backtracking_factor
 
+        z_old = z
         z = prox_2(x + step_size * u, step_size, *args_prox)
         u += (x - z) / step_size
         certificate = norm_incr / step_size
+
+
+#        if total_func is not None:
+#            fvvv = total_func(x)
+#            Fval_list.append(fvvv)
+
 
         if ls and h_Lipschitz is not None:
             if h_Lipschitz == 0:
