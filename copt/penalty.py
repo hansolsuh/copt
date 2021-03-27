@@ -16,12 +16,12 @@ class L1Norm:
 
   """
 
-    def __init__(self, alpha, H):
+    def __init__(self, alpha, Hinv):
         self.alpha = alpha
-        if H is None:
-            self.H = 1
+        if Hinv is None:
+            self.Hinv = 1
         else:
-            self.H = H
+            self.Hinv = Hinv
 
     def __call__(self, x):
         return self.alpha * np.abs(x).sum()
@@ -33,8 +33,8 @@ class L1Norm:
         minimize_proximal_gradient, minimize_three_split and
         minimize_primal_dual.
         """
-        return np.fmax(x - (self.alpha * step_size)/self.H, 0) - np.fmax(
-            -x - (self.alpha * step_size)/self.H, 0
+        return np.fmax(x - self.Hinv*(self.alpha * step_size), 0) - np.fmax(
+            -x - self.Hinv*(self.alpha * step_size), 0
         )
 
     def prox_factory(self, n_features):
@@ -71,7 +71,7 @@ class GroupL1:
 
   """
 
-    def __init__(self, alpha, groups, H):
+    def __init__(self, alpha, groups, Hinv):
         self.alpha = alpha
         # groups need to be increasing
         for i, g in enumerate(groups):
@@ -80,7 +80,7 @@ class GroupL1:
             if i > 0 and groups[i - 1][-1] >= g[0]:
                 raise ValueError("Groups must be increasing")
         self.groups = groups
-        self.H = H #TODO make "subscriptable" int 1 ?
+        self.Hinv = Hinv #TODO make "subscriptable" int 1 ?
 
     def __call__(self, x):
         return self.alpha * np.sum([np.linalg.norm(x[g]) for g in self.groups])
@@ -91,7 +91,7 @@ class GroupL1:
 
             norm = np.linalg.norm(x[g])
             if norm > self.alpha * step_size:
-                out[g] -= step_size * self.alpha * out[g] / (norm*self.H[g])
+                out[g] -= step_size * self.alpha * out[g] * self.Hinv[g] / norm
             else:
                 out[g] = 0
         return out
