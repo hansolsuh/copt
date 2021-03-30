@@ -195,40 +195,41 @@ def minimize_three_split(
                 a2_list.append(a_bb2)
                 Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
 ##                Hinv_avglist.append(np.average(Hinv))
-        
-#        if L_Lip is not None:
-#            Hinv[Hinv<L_Lip] = L_Lip
-#
-#        x_old = x
-#        x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
-#        total_eval = total_func(x)
-#
-#        ls_it = 0
-#
-#        if len(Fval_list) < M_ls:
-#            Fval_list.append(total_eval)
-#        else:
-#            del Fval_list[0]
-#            Fval_list.append(total_eval)
-#
-#        while True and it>1 and VM_trigger: #TODO make breakable? trigger?
-#            Hinv *= b_ls
-#            x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
-#            total_eval = total_func(x)
-#
-#            
-#            xdiff = x-x_old
-##            if total_eval <= max(Fval_list) - dot(Hinv*xdiff, xdiff):
-#            if total_eval <= max(Fval_list) - dot(Hinv*xdiff, xdiff):
-#                print(ls_it)
-#                break
-#            ls_it += 1
-#
-#            if ls_it > 1000:
-##                Hinv.fill(1)
-##                VM_trigger = None
-##                print(it)
-#                break
+
+        import pdb
+        pdb.set_trace()
+        if L_Lip is not None:
+            Hinv[Hinv<L_Lip] = L_Lip
+
+        x_old = x
+        x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
+        total_eval = total_func(x)
+
+        ls_it = 0
+
+        if len(Fval_list) < M_ls:
+            Fval_list.append(total_eval)
+        else:
+            del Fval_list[0]
+            Fval_list.append(total_eval)
+
+        while True and it>1 and VM_trigger: #TODO make breakable? trigger?
+            Hinv /= b_ls
+            x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
+            total_eval = total_func(x)
+
+            
+            xdiff = x-x_old
+            if total_eval <= max(Fval_list) - dot(Hinv*xdiff, xdiff):
+                print(ls_it)
+                break
+            ls_it += 1
+
+            if ls_it > 1000:
+#                Hinv.fill(1)
+#                VM_trigger = None
+#                print(it)
+                break
 
 
 #
