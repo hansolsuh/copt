@@ -8,8 +8,6 @@ import matplotlib.pyplot as plt
 from . import utils
 
 def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv):
-#    import pdb
-#    pdb.set_trace()
     n = Hinv.size
     param = (sk*yk+mu*Hinv)/(yk*yk+mu)
     for i in range(0,n):
@@ -19,8 +17,6 @@ def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv):
             Hinv[i] = a_bb2
         else:
             Hinv[i] = param[i]
-#    import pdb
-#    pdb.set_trace()
     return;
 
 def minimize_three_split(
@@ -151,8 +147,6 @@ def minimize_three_split(
         line_search = True
         step_size = 1.0 / utils.init_lipschitz(f_grad, x0)
 
-    import pdb
-    pdb.set_trace()
     z_old = x0
     z = prox_2(x0, step_size, *args_prox)
     LS_EPS = np.finfo(np.float).eps
@@ -176,8 +170,6 @@ def minimize_three_split(
     b_ls = 1.1
 
     for it in range(max_iter):
-#            import pdb
-#            pdb.set_trace()
 
         grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
@@ -196,8 +188,6 @@ def minimize_three_split(
                 Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
 ##                Hinv_avglist.append(np.average(Hinv))
 
-        import pdb
-        pdb.set_trace()
         if L_Lip is not None:
             Hinv[Hinv<L_Lip] = L_Lip
 
@@ -283,10 +273,6 @@ def minimize_three_split(
                 success = True
                 break
             
-#    plt.plot(temp_list)
-#    plt.show()
-#    import pdb
-#    pdb.set_trace()
     return optimize.OptimizeResult(
         x=x, success=success, nit=it, certificate=certificate, step_size=step_size
     )
