@@ -168,7 +168,7 @@ def minimize_three_split(
     Fval_list = []
     M_ls = 5
     b_ls = 1.1
-#    Hinv *= 0.00015339534146545738
+    step_list = []
 
     for it in range(max_iter):
 
@@ -181,20 +181,16 @@ def minimize_three_split(
             yk = grad_fk - grad_fk_old #TODO grad_f(x) not z?
             hk = C + np.max(-dot(sk,yk)/(norm(sk)**2),0)*(norm(grad_fk_old)**(-r))
 
-            if it > 0:
-                a_bb1 = dot(yk,yk)/(2*dot(sk,sk))
-                a_bb2 = dot(yk,yk)/dot(sk,yk)
-                a1_list.append(a_bb1)
-                a2_list.append(a_bb2)
-                Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
-##                Hinv_avglist.append(np.average(Hinv))
-#        if L_Lip is not None:
-#            Hinv[Hinv<L_Lip] = L_Lip
-        import pdb
-        pdb.set_trace()
+            a_bb1 = dot(yk,yk)/(2*dot(sk,sk))
+            a_bb2 = dot(yk,yk)/dot(sk,yk)
+            a1_list.append(a_bb1)
+            a2_list.append(a_bb2)
+            Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
+            Hinv_avglist.append(np.average(1/Hinv))
+
         x_old = x
-        if VM_trigger:
-            x = prox_1(z - (1/Hinv) *  (u + grad_fk), step_size, *args_prox)
+        if VM_trigger and it > 1:
+            x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
         else:
             x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
 
@@ -237,7 +233,11 @@ def minimize_three_split(
         ls = norm_incr > 1e-7 and line_search
         if ls:
             for it_ls in range(max_iter_backtracking):
-                rhs = fk + grad_fk.dot(incr) + (norm_incr ** 2) / (2 * step_size)
+                if VM_trigger:
+                    tmp = incr.dot(incr*Hinv)
+                    rhs = fk + grad_fk.dot(incr) + 0.5*tmp
+                else:
+                    rhs = fk + grad_fk.dot(incr) + (norm_incr ** 2) / (2 * step_size)
                 ls_tol = f_grad(x, return_gradient=False) - rhs
                 if ls_tol <= LS_EPS:
                     # step size found
@@ -245,12 +245,15 @@ def minimize_three_split(
                     #     ls_tol = 0.
                     break
                 else:
-                    step_size *= backtracking_factor
+                    if VM_trigger:
+                        Hinv *= b_ls
+                    else:
+                        step_size *= backtracking_factor
 
         z_old = z
 
-        if VM_trigger:
-            z = prox_2(x + (1/Hinv)* u, step_size, *args_prox)
+        if VM_trigger and it > 1:
+            z = prox_2(x + (1/Hinv)* u, 1, *args_prox)
             u += (x - z) / (1/Hinv)
         else:
             z = prox_2(x + step_size * u, step_size, *args_prox)
@@ -282,6 +285,7 @@ def minimize_three_split(
             else:                
                 success = True
                 break
+#        step_list.append(step_size)
             
     return optimize.OptimizeResult(
         x=x, success=success, nit=it, certificate=certificate, step_size=step_size
