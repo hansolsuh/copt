@@ -168,6 +168,7 @@ def minimize_three_split(
     Fval_list = []
     M_ls = 5
     b_ls = 1.1
+#    Hinv *= 0.00015339534146545738
 
     for it in range(max_iter):
 
@@ -187,12 +188,16 @@ def minimize_three_split(
                 a2_list.append(a_bb2)
                 Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
 ##                Hinv_avglist.append(np.average(Hinv))
-
-        if L_Lip is not None:
-            Hinv[Hinv<L_Lip] = L_Lip
-
+#        if L_Lip is not None:
+#            Hinv[Hinv<L_Lip] = L_Lip
+        import pdb
+        pdb.set_trace()
         x_old = x
-        x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
+        if VM_trigger:
+            x = prox_1(z - (1/Hinv) *  (u + grad_fk), step_size, *args_prox)
+        else:
+            x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
+
         total_eval = total_func(x)
 
         ls_it = 0
@@ -203,23 +208,23 @@ def minimize_three_split(
             del Fval_list[0]
             Fval_list.append(total_eval)
 
-        while True and it>1 and VM_trigger: #TODO make breakable? trigger?
-            Hinv /= b_ls
-            x = prox_1(z - step_size *  (u + Hinv*grad_fk), step_size, *args_prox)
-            total_eval = total_func(x)
-
-            
-            xdiff = x-x_old
-            if total_eval <= max(Fval_list) - dot(Hinv*xdiff, xdiff):
-                print(ls_it)
-                break
-            ls_it += 1
-
-            if ls_it > 1000:
-#                Hinv.fill(1)
-#                VM_trigger = None
-#                print(it)
-                break
+#        while True and it>1 and VM_trigger: #TODO make breakable? trigger?
+#            Hinv *= b_ls
+#            x = prox_1(z - (1/Hinv) *  (u + grad_fk), step_size, *args_prox)
+#            total_eval = total_func(x)
+#
+#            
+#            xdiff = x-x_old
+#            if total_eval <= max(Fval_list) - dot((1/Hinv)*xdiff, xdiff):
+##                print(ls_it)
+#                break
+#            ls_it += 1
+#
+#            if ls_it > 1000:
+##                Hinv.fill(1)
+##                VM_trigger = None
+##                print(it)
+#                break
 
 
 #
@@ -243,8 +248,13 @@ def minimize_three_split(
                     step_size *= backtracking_factor
 
         z_old = z
-        z = prox_2(x + step_size * u, step_size, *args_prox)
-        u += (x - z) / step_size
+
+        if VM_trigger:
+            z = prox_2(x + (1/Hinv)* u, step_size, *args_prox)
+            u += (x - z) / (1/Hinv)
+        else:
+            z = prox_2(x + step_size * u, step_size, *args_prox)
+            u += (x - z) / step_size
         certificate = norm_incr / step_size
 
 
