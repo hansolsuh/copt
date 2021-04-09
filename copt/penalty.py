@@ -16,12 +16,12 @@ class L1Norm:
 
   """
 
-    def __init__(self, alpha, Hinv):
+    def __init__(self, alpha, H):
         self.alpha = alpha
-        if Hinv is None:
-            self.Hinv = 1
+        if H is None:
+            self.H = 1
         else:
-            self.Hinv = Hinv
+            self.H = H
 
     def __call__(self, x):
         return self.alpha * np.abs(x).sum()
@@ -33,8 +33,8 @@ class L1Norm:
         minimize_proximal_gradient, minimize_three_split and
         minimize_primal_dual.
         """
-        return np.fmax(x - self.Hinv*(self.alpha * step_size), 0) - np.fmax(
-            -x - self.Hinv*(self.alpha * step_size), 0
+        return np.fmax(x - (1/self.H)*(self.alpha * step_size), 0) - np.fmax(
+            -x - (1/self.H)*(self.alpha * step_size), 0
         )
 
     def prox_factory(self, n_features):
@@ -71,7 +71,7 @@ class GroupL1:
 
   """
 
-    def __init__(self, alpha, groups, Hinv):
+    def __init__(self, alpha, groups, H):
         self.alpha = alpha
         # groups need to be increasing
         for i, g in enumerate(groups):
@@ -80,7 +80,10 @@ class GroupL1:
             if i > 0 and groups[i - 1][-1] >= g[0]:
                 raise ValueError("Groups must be increasing")
         self.groups = groups
-        self.Hinv = Hinv #TODO make "subscriptable" int 1 ?
+        if H is None:
+            self.H = 1
+        else:
+            self.H = H #TODO make "subscriptable" int 1 ?
 
     def __call__(self, x):
         return self.alpha * np.sum([np.linalg.norm(x[g]) for g in self.groups])
@@ -91,7 +94,7 @@ class GroupL1:
 
             norm = np.linalg.norm(x[g])
             if norm > self.alpha * step_size:
-                out[g] -= step_size * self.alpha * out[g] * self.Hinv[g] / norm
+                out[g] -= step_size * self.alpha * out[g] * (1/self.H[g]) / norm
             else:
                 out[g] = 0
         return out
@@ -251,10 +254,14 @@ class TraceNorm:
 
     is_separable = False
 
-    def __init__(self, alpha, shape):
+    def __init__(self, alpha, shape,H):
         assert len(shape) == 2
         self.shape = shape
         self.alpha = alpha
+        if H is None:
+            self.H = 1
+        else:
+            self.H = H
 
     def __call__(self, x):
         X = x.reshape(self.shape)
@@ -262,11 +269,17 @@ class TraceNorm:
 
     def prox(self, x, step_size):
         X = x.reshape(self.shape)
+        if self.H is not 1:
+            Hmat = self.H.reshape(self.shape)
         U, s, Vt = linalg.svd(X, full_matrices=False)
         s_threshold = np.fmax(s - self.alpha * step_size, 0) - np.fmax(
             -s - self.alpha * step_size, 0
         )
-        return (U * s_threshold).dot(Vt).ravel()
+        if self.H is 1:
+            return (U * s_threshold).dot(Vt).ravel()
+        else:
+            return (Hmat *(U * s_threshold).dot(Vt)).ravel()
+        #TODO i think its right? investigate later... extension from 10.1137/080738970
 
     def prox_factory(self):
         raise NotImplementedError
