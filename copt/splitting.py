@@ -40,6 +40,8 @@ def minimize_three_split(
     total_func=None,
     args_prox=(),
 ):
+
+    #TODO note: Hinv is actually H.... notational mistake...
     """Davis-Yin three operator splitting method.
 
     This algorithm can solve problems of the form
@@ -188,23 +190,28 @@ def minimize_three_split(
             Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
             Hinv_avglist.append(np.average(1/Hinv))
 
+        if L_Lip is not None:
+            if np.any(Hinv<L_Lip):
+                Hinv[Hinv<L_Lip] = L_Lip
+       
         x_old = x
         if VM_trigger and it > 1:
             x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
         else:
             x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
 
-        total_eval = total_func(x)
-
-        ls_it = 0
-
-        if len(Fval_list) < M_ls:
-            Fval_list.append(total_eval)
-        else:
-            del Fval_list[0]
-            Fval_list.append(total_eval)
-
-#        while True and it>1 and VM_trigger: #TODO make breakable? trigger?
+#        if total_func:
+#            total_eval = total_func(x)
+#
+#            ls_it = 0
+#    
+#            if len(Fval_list) < M_ls:
+#                Fval_list.append(total_eval)
+#            else:
+#                del Fval_list[0]
+#                Fval_list.append(total_eval)
+#
+#        while True and it>1 and VM_trigger: #TODO If Lip is given, unnecessary which is the case for all the examples. TODO for non-monotonic linesearch a la goldstein 2014
 #            Hinv *= b_ls
 #            x = prox_1(z - (1/Hinv) *  (u + grad_fk), step_size, *args_prox)
 #            total_eval = total_func(x)
@@ -222,11 +229,6 @@ def minimize_three_split(
 ##                print(it)
 #                break
 
-
-#
-##        if it == 100 and VM_trigger:
-##            Hinv.fill(1)
-##            VM_trigger = None
 
         incr = x - z
         norm_incr = np.linalg.norm(incr)
