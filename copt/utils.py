@@ -146,6 +146,7 @@ class Trace:
         self.trace_x = []
         self.trace_time = []
         self.trace_fx = []
+        self.trace_Hinv = []
         self.trace_step_size = []
         self.start = datetime.now()
         self._counter = 0
@@ -161,6 +162,10 @@ class Trace:
             delta = (datetime.now() - self.start).total_seconds()
             self.trace_time.append(delta)
             self.trace_step_size.append(dl["step_size"])
+            self.trace_fx.append(dl["fk"])
+
+            if dl.get("VM_trigger") is not None:
+                self.trace_Hinv.append(dl["Hinv"].copy())
         self._counter += 1
 
 
