@@ -4,6 +4,7 @@ from numpy.linalg import norm
 from numpy import dot
 from scipy import optimize, linalg, sparse
 import matplotlib.pyplot as plt
+from collections import deque
 
 from . import utils
 
@@ -11,9 +12,9 @@ def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv):
     n = Hinv.size
     param = (sk*yk+mu*Hinv)/(yk*yk+mu)
     for i in range(0,n):
-        if param[i] < a_bb1:
+        if param[i] < a_bb1 and a_bb1 >= 0:
             Hinv[i] = a_bb1
-        elif param[i] > a_bb2:
+        elif param[i] > a_bb2 and a_bb2 >=0:
             Hinv[i] = a_bb2
         else:
             Hinv[i] = param[i]
@@ -103,6 +104,9 @@ def minimize_three_split(
         Barrier parameter for Interior Point Method. 
         If given, it will decrease when tolerance is met for the certificate
 
+      total_func : float, optional
+        Evaluate function value of overall problem.
+
 
     Returns:
       res : OptimizeResult
@@ -138,6 +142,9 @@ def minimize_three_split(
         def prox_2(x, s, *args):
             return x
 
+
+    x0_temp = np.copy(x0)
+
     n = x0.size
     VM_trigger = 1
 
@@ -159,7 +166,7 @@ def minimize_three_split(
     u = np.zeros_like(x)
 
     delta = 2
-    mu    = 1000000 #TODO large mu for static hessian. how large?
+    mu    = 100
     C     = 10
     r     = 1
 
@@ -169,85 +176,77 @@ def minimize_three_split(
     Hinv_avglist = []
     Fval_list = []
     M_ls = 5
-    b_ls = 1.1
+    b_ls = 1/0.7
     step_list = []
+    nm_bt =5
+    nm_bt_dq = deque(nm_bt*[0],nm_bt)
 
     for it in range(max_iter):
-
+        if it >= 60:
+            import pdb
+            pdb.set_trace()
         grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
+        nm_bt_dq.append(fk)
 
-
-        if VM_trigger and it > 1: 
+        if VM_trigger and it > 1:
             sk = x - x_old
             yk = grad_fk - grad_fk_old #TODO grad_f(x) not z?
-            hk = C + np.max(-dot(sk,yk)/(norm(sk)**2),0)*(norm(grad_fk_old)**(-r))
+            sy = dot(sk,yk)
+            ss = dot(sk,sk)
+            yy = dot(yk,yk)
 
-            a_bb1 = dot(yk,yk)/(2*dot(sk,sk))
-            a_bb2 = dot(yk,yk)/dot(sk,yk)
+            if it > 2:
+                a_bb1_old = a_bb1
+                a_bb2_old = a_bb2
+            a_bb1 = sy/ss
+            a_bb2 = yy/sy
+
+            if a_bb1 < 0:
+                a_bb1 = a_bb1_old
+            if a_bb2 < 0:
+                a_bb2 = a_bb2_old
+
             a1_list.append(a_bb1)
             a2_list.append(a_bb2)
             Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
-            Hinv_avglist.append(np.average(1/Hinv))
+            Hinv_avglist.append(np.average(Hinv))
 
-        if L_Lip is not None:
-            if np.any(Hinv<L_Lip):
-                Hinv[Hinv<L_Lip] = L_Lip
-       
         x_old = x
         if VM_trigger and it > 1:
             x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
         else:
             x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
 
-#        if total_func:
-#            total_eval = total_func(x)
-#
-#            ls_it = 0
-#    
-#            if len(Fval_list) < M_ls:
-#                Fval_list.append(total_eval)
-#            else:
-#                del Fval_list[0]
-#                Fval_list.append(total_eval)
-#
-#        while True and it>1 and VM_trigger: #TODO If Lip is given, unnecessary which is the case for all the examples. TODO for non-monotonic linesearch a la goldstein 2014
-#            Hinv *= b_ls
-#            x = prox_1(z - (1/Hinv) *  (u + grad_fk), step_size, *args_prox)
-#            total_eval = total_func(x)
-#
-#            
-#            xdiff = x-x_old
-#            if total_eval <= max(Fval_list) - dot((1/Hinv)*xdiff, xdiff):
-##                print(ls_it)
-#                break
-#            ls_it += 1
-#
-#            if ls_it > 1000:
-##                Hinv.fill(1)
-##                VM_trigger = None
-##                print(it)
-#                break
-
-
         incr = x - z
         norm_incr = np.linalg.norm(incr)
+
+        fx = f_grad(x, return_gradient=False) 
         ls = norm_incr > 1e-7 and line_search
         if ls:
             for it_ls in range(max_iter_backtracking):
                 if VM_trigger:
                     tmp = incr.dot(incr*Hinv)
-                    rhs = fk + grad_fk.dot(incr) + 0.5*tmp
+                    #rhs = fk + grad_fk.dot(incr) + 0.5*tmp
+
+                    rhs = np.max(nm_bt_dq) + grad_fk.dot(incr) + 0.5*tmp
+                    #rhs = np.max(nm_bt_dq) - 0.5*tmp
+
+                    #TODO I could use second order term of f(x) for searching
+                    #OR of f+g+h?
+                    # Or do non-monotonic LS on f(x) term itself...
+                    
                 else:
                     rhs = fk + grad_fk.dot(incr) + (norm_incr ** 2) / (2 * step_size)
-                ls_tol = f_grad(x, return_gradient=False) - rhs
-                if ls_tol <= LS_EPS:
+                ls_tol = fx - rhs
+                if ls_tol <= 1.e-12:
                     # step size found
                     # if ls_tol > 0:
                     #     ls_tol = 0.
                     break
                 else:
                     if VM_trigger:
+#                        print(it)
                         Hinv *= b_ls
                     else:
                         step_size *= backtracking_factor
@@ -260,12 +259,14 @@ def minimize_three_split(
         else:
             z = prox_2(x + step_size * u, step_size, *args_prox)
             u += (x - z) / step_size
-        certificate = norm_incr / step_size
 
-
-#        if total_func is not None:
-#            fvvv = total_func(x)
-#            Fval_list.append(fvvv)
+        if VM_trigger:
+#            certificate = norm_incr / step_size
+            #certificate = norm_incr * Hinv
+            #certificate = np.max(certificate)
+            certificate = norm_incr / step_size
+        else:
+            certificate = norm_incr / step_size
 
 
         if ls and h_Lipschitz is not None:
@@ -284,11 +285,33 @@ def minimize_three_split(
             if barrier != None:
                 if barrier > 1.e-12:
                     barrier /= 1.1
+                    #print("it, barrier :", it,barrier)
+                else:
+                    success = True
+                    break
             else:                
                 success = True
                 break
-#        step_list.append(step_size)
-            
+
+        step_list.append(step_size)
+
+#    z = np.zeros(1000)
+#    import pdb
+#    pdb.set_trace()
+#    for i in range(400):
+#        x = prox_1(z,step_size, *args_prox)
+#        fk, grad_fk = f_grad(x)
+#        zh = 2*x - z - step_size*grad_fk
+#        xf = prox_2(zh,step_size, *args_prox)
+#        z = z+ xf-x
+#        if callback is not None:
+#            if callback(locals()) is False:
+#                break
+#    it = 400
+#    certificate = norm(xf-x)/step_size
+#
+#    import pdb
+#    pdb.set_trace()
     return optimize.OptimizeResult(
         x=x, success=success, nit=it, certificate=certificate, step_size=step_size
     )
