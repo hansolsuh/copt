@@ -166,7 +166,7 @@ def minimize_three_split(
     u = np.zeros_like(x)
 
     delta = 2
-    mu    = 100
+    mu    = 10000
     C     = 10
     r     = 1
 
@@ -178,13 +178,12 @@ def minimize_three_split(
     M_ls = 5
     b_ls = 1/0.7
     step_list = []
-    nm_bt =5
+    nm_bt =5 #Size of deque for non-monotonic linesearch
     nm_bt_dq = deque(nm_bt*[0],nm_bt)
 
     for it in range(max_iter):
-        if it >= 60:
-            import pdb
-            pdb.set_trace()
+#        import pdb
+#        pdb.set_trace()
         grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
         nm_bt_dq.append(fk)
@@ -225,7 +224,7 @@ def minimize_three_split(
         ls = norm_incr > 1e-7 and line_search
         if ls:
             for it_ls in range(max_iter_backtracking):
-                if VM_trigger:
+                if VM_trigger and it > 1:
                     tmp = incr.dot(incr*Hinv)
                     #rhs = fk + grad_fk.dot(incr) + 0.5*tmp
 
@@ -245,7 +244,7 @@ def minimize_three_split(
                     #     ls_tol = 0.
                     break
                 else:
-                    if VM_trigger:
+                    if VM_trigger and it>1:
 #                        print(it)
                         Hinv *= b_ls
                     else:
@@ -260,11 +259,11 @@ def minimize_three_split(
             z = prox_2(x + step_size * u, step_size, *args_prox)
             u += (x - z) / step_size
 
+
         if VM_trigger:
-#            certificate = norm_incr / step_size
-            #certificate = norm_incr * Hinv
-            #certificate = np.max(certificate)
-            certificate = norm_incr / step_size
+            certificate = norm_incr * Hinv
+            certificate = np.max(certificate)
+            #certificate = norm_incr / step_size
         else:
             certificate = norm_incr / step_size
 
@@ -295,21 +294,6 @@ def minimize_three_split(
 
         step_list.append(step_size)
 
-#    z = np.zeros(1000)
-#    import pdb
-#    pdb.set_trace()
-#    for i in range(400):
-#        x = prox_1(z,step_size, *args_prox)
-#        fk, grad_fk = f_grad(x)
-#        zh = 2*x - z - step_size*grad_fk
-#        xf = prox_2(zh,step_size, *args_prox)
-#        z = z+ xf-x
-#        if callback is not None:
-#            if callback(locals()) is False:
-#                break
-#    it = 400
-#    certificate = norm(xf-x)/step_size
-#
 #    import pdb
 #    pdb.set_trace()
     return optimize.OptimizeResult(
