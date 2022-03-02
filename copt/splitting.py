@@ -10,12 +10,12 @@ from . import utils
 
 def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv):
     n = Hinv.size
-    param = (sk*yk+mu*Hinv)/(yk*yk+mu)
+    param = (sk*yk+mu*Hinv)/(sk*sk+mu)
     for i in range(0,n):
-        if param[i] < a_bb1 and a_bb1 >= 0:
-            Hinv[i] = a_bb1
-        elif param[i] > a_bb2 and a_bb2 >=0:
-            Hinv[i] = a_bb2
+        if param[i] < (1/a_bb1) and a_bb1 >= 0:
+            Hinv[i] = (1/a_bb1)
+        elif param[i] > (1/a_bb2) and a_bb2 >=0:
+            Hinv[i] = (1/a_bb2)
         else:
             Hinv[i] = param[i]
     return;
@@ -39,6 +39,7 @@ def minimize_three_split(
     hcopt=None,
     Hinv=None,
     total_func=None,
+    anderson=0,
     args_prox=(),
 ):
 
@@ -106,6 +107,9 @@ def minimize_three_split(
 
       total_func : float, optional
         Evaluate function value of overall problem.
+
+      anderson : int, optional
+        Trigger for Anderson-Acceleration. 0 means off, int>0 means size of memory for AA
 
 
     Returns:
@@ -181,12 +185,24 @@ def minimize_three_split(
     nm_bt =5 #Size of deque for non-monotonic linesearch
     nm_bt_dq = deque(nm_bt*[0],nm_bt)
 
+    bb_stab_delta = np.infty
+    norm_sk = np.infty
+
+    if VM_trigger and not line_search:        
+        bb_stab_delta_ls_trigger = True
+        line_search = True
+        #Setting temporary trigger
+        #For BB, initially do non-stab to see the magnitude of \|s_k\|
+    else:
+        bb_stab_delta_ls_trigger = False
+
     for it in range(max_iter):
-#        import pdb
-#        pdb.set_trace()
         grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
         nm_bt_dq.append(fk)
+
+        aa_mk = min(anderson,it)
+
 
         if VM_trigger and it > 1:
             sk = x - x_old
@@ -198,13 +214,22 @@ def minimize_three_split(
             if it > 2:
                 a_bb1_old = a_bb1
                 a_bb2_old = a_bb2
-            a_bb1 = sy/ss
-            a_bb2 = yy/sy
+            a_bb1 = ss/sy
+            a_bb2 = sy/yy
 
             if a_bb1 < 0:
                 a_bb1 = a_bb1_old
             if a_bb2 < 0:
                 a_bb2 = a_bb2_old
+
+            #Stablization
+            if it < 4 and bb_stab_delta_ls_trigger:
+                norm_sk = min(norm_sk,np.linalg.norm(sk))
+            if bb_stab_delta_ls_trigger:
+                if it >= 4:
+                    bb_stab_delta = 2*norm_sk
+                    line_search = False
+                a_bb2 = min(a_bb2, bb_stab_delta/np.linalg.norm(grad_fk))
 
             a1_list.append(a_bb1)
             a2_list.append(a_bb2)
@@ -219,7 +244,7 @@ def minimize_three_split(
 
         incr = x - z
         norm_incr = np.linalg.norm(incr)
-
+    
         fx = f_grad(x, return_gradient=False) 
         ls = norm_incr > 1e-7 and line_search
         if ls:
@@ -260,6 +285,8 @@ def minimize_three_split(
             u += (x - z) / step_size
 
 
+        #Anderson
+
         if VM_trigger:
             certificate = norm_incr * Hinv
             certificate = np.max(certificate)
@@ -293,9 +320,6 @@ def minimize_three_split(
                 break
 
         step_list.append(step_size)
-
-#    import pdb
-#    pdb.set_trace()
     return optimize.OptimizeResult(
         x=x, success=success, nit=it, certificate=certificate, step_size=step_size
     )
