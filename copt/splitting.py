@@ -2,7 +2,8 @@ import warnings
 import numpy as np
 from numpy.linalg import norm
 from numpy import dot
-from scipy import optimize, linalg, sparse
+from scipy import optimize, linalg, sparse 
+import scipy as sp
 import matplotlib.pyplot as plt
 from collections import deque
 
@@ -39,7 +40,8 @@ def minimize_three_split(
     hcopt=None,
     Hinv=None,
     total_func=None,
-    anderson=0,
+    anderson_inner=0,
+    anderson_outer=0,
     args_prox=(),
 ):
 
@@ -108,8 +110,14 @@ def minimize_three_split(
       total_func : float, optional
         Evaluate function value of overall problem.
 
-      anderson : int, optional
+      anderson_inner : int, optional
         Trigger for Anderson-Acceleration. 0 means off, int>0 means size of memory for AA
+        This for inner part - only acts on gradient part. See Mai and Johansson
+
+      anderson_outer : int, optional
+        Trigger for Anderson-Acceleration. 0 means off, int>0 means size of memory for AA
+        This is for fixed-point of the algorithm as a whole. See Fu,Zhang,Boyd.
+
 
 
     Returns:
@@ -152,6 +160,12 @@ def minimize_three_split(
     n = x0.size
     VM_trigger = 1
 
+    if anderson_inner is None:
+        anderson_inner = 0
+
+    if anderson_outer is None:
+        anderson_outer = 0
+
     if Hinv is None:
         Hinv = np.ones(n)
         VM_trigger = 0
@@ -166,6 +180,30 @@ def minimize_three_split(
 
     fk, grad_fk = f_grad(z)
     x_old = x0
+
+    if anderson_inner !=0:
+        _,grad_fk_temp = f_grad(x0)
+        aa_yk = x0-step_size*grad_fk_temp
+        R_aa  = []
+        g_aa  = [] #Stores list of g_k = x_k-step_size*grad_fk
+        Y_aa  = []
+        S_aa  = []
+        aa_rk = np.zeros_like(x0)
+
+    #TODO merge with inner one?
+    if anderson_outer !=0:
+        _,grad_fk_temp = f_grad(x0)
+        aa_yk = x0-step_size*grad_fk_temp
+        R_aa  = []
+        g_aa  = [] #Stores list of g_k = x_k-step_size*grad_fk
+        Y_aa  = []
+        S_aa  = []
+        aa_rk = np.zeros_like(x0)
+        safeguard = True
+        R_AA_outer = 0
+        R_AA = 5
+
+      
     x = prox_1(z - step_size * grad_fk, step_size, *args_prox)
     u = np.zeros_like(x)
 
@@ -196,12 +234,14 @@ def minimize_three_split(
     else:
         bb_stab_delta_ls_trigger = False
 
+
     for it in range(max_iter):
         grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
         nm_bt_dq.append(fk)
 
-        aa_mk = min(anderson,it)
+        aa_mk_inner = min(anderson_inner,it)
+        aa_mk_outer = min(anderson_outer,it)
 
 
         if VM_trigger and it > 1:
@@ -236,11 +276,49 @@ def minimize_three_split(
             Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
             Hinv_avglist.append(np.average(Hinv))
 
+        #Mai-Johnson way. Doing AA on gradient term only as g,h may not have full domain?
+        if anderson_inner != 0:
+            aa_gk = z - step_size*(u+grad_fk)
+            aa_rk_old = aa_rk
+            aa_rk =  aa_gk - aa_yk
+            len_R = len(R_aa)
+            if len_R >= aa_mk_inner and len_R != 0:
+                R_aa.pop(0)
+            R_aa.append(aa_rk)
+            temp_aa = np.matmul(np.array(R_aa),np.array(R_aa).T) #R^T*R. TODO QR
+            one_R = np.ones(len(R_aa))
+            lbd_aa = 1.0 #Regularized version. See Bach, Daspermont, Scieur
+            np.fill_diagonal(temp_aa,temp_aa.diagonal()+lbd_aa)
+            aa_sol = np.linalg.solve(temp_aa,one_R)
+#            [u_svd,s_svd,vh_svd] = np.linalg.svd(temp_aa) #truncated svd. no difference
+#            s_svd_trun = np.where(s_svd < 1.e-12,0,s_svd)
+#            aa_sol = (vh_svd.T*s_svd_trun*u_svd.T) @ one_R
+            aa_sol = aa_sol/sum(aa_sol)
+
+            if len(g_aa) >= aa_mk_inner and len(g_aa) != 0:
+                g_aa.pop(0)
+            g_aa.append(aa_gk)
+            y_test = sum([g_aa[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
+            x_test = prox_1(y_test, step_size, *args_prox)
+            fx_test = f_grad(x_test, return_gradient=False) 
+            fx_old,grad_fk_old = f_grad(x_old)  #Maybe from previous iter still holds here?
+
+            print( fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old)- fx_test)
+            if fx_test <= fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old):
+                print('wwwwwwwwwwwwwwww',it)
+                x = x_test
+                aa_yk = aa_yk
+            else:
+                x = prox_1(aa_gk,step_size,*args_prox)
+                aa_yk = aa_gk
+
         x_old = x
-        if VM_trigger and it > 1:
-            x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
-        else:
-            x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
+
+        if anderson_inner == 0:
+            if VM_trigger and it > 1:
+                x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
+            else:
+                x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
 
         incr = x - z
         norm_incr = np.linalg.norm(incr)
@@ -251,15 +329,7 @@ def minimize_three_split(
             for it_ls in range(max_iter_backtracking):
                 if VM_trigger and it > 1:
                     tmp = incr.dot(incr*Hinv)
-                    #rhs = fk + grad_fk.dot(incr) + 0.5*tmp
-
                     rhs = np.max(nm_bt_dq) + grad_fk.dot(incr) + 0.5*tmp
-                    #rhs = np.max(nm_bt_dq) - 0.5*tmp
-
-                    #TODO I could use second order term of f(x) for searching
-                    #OR of f+g+h?
-                    # Or do non-monotonic LS on f(x) term itself...
-                    
                 else:
                     rhs = fk + grad_fk.dot(incr) + (norm_incr ** 2) / (2 * step_size)
                 ls_tol = fx - rhs
@@ -270,13 +340,11 @@ def minimize_three_split(
                     break
                 else:
                     if VM_trigger and it>1:
-#                        print(it)
                         Hinv *= b_ls
                     else:
                         step_size *= backtracking_factor
 
         z_old = z
-
         if VM_trigger and it > 1:
             z = prox_2(x + (1/Hinv)* u, 1, *args_prox)
             u += (x - z) / (1/Hinv)
@@ -284,8 +352,72 @@ def minimize_three_split(
             z = prox_2(x + step_size * u, step_size, *args_prox)
             u += (x - z) / step_size
 
+        #Notation here:
+        #z     := z_TOS^{k+1}
+        #z_old := z^k
+        #aa_gk := z - z_old := v^k - v_{TOS}^{k+1}
+        #Anderson for Fixed Point Iteration. Fu,Zhang,Boyd.
+        #Using z vector here
+        if anderson_outer != 0:
+            fk_z, grad_fk_z = f_grad(z)
+            #TODO aa_gk is overall residual... not just gradient term
+            aa_gk = z - z_old
+            #aa_gk = z - step_size*(u+grad_fk)
+            aa_rk_old = aa_rk
+            aa_rk =  aa_gk - aa_yk
+            len_S = len(S_aa)
+            len_Y = len(Y_aa)
+            if len_S >= aa_mk_outer and len_S != 0:
+                S_aa.pop(0)
+            if len_Y >= aa_mk_outer and len_Y != 0:
+                Y_aa.pop(0)
+            S_aa.append(z - z_old)
+            Y_aa.append(aa_rk - aa_rk_old)
 
-        #Anderson
+            def reg_aa(x,S,Y,g):
+                S = np.array(S)
+                Y = np.array(Y)
+                eta = 1.
+                SY = np.linalg.norm(S)**2 + np.linalg.norm(Y)**2
+                return np.linalg.norm(g- Y.T @ x)**2 + eta*SY*np.dot(x,x)
+            
+            if aa_mk_outer == 0:
+                x0_aa = np.zeros(1)
+            else:
+                x0_aa = np.zeros(aa_mk_outer)
+
+            if it >0:
+                gamma_aa_opt = sp.optimize.minimize(reg_aa,x0_aa,method='nelder-mead',args=(S_aa,Y_aa,aa_rk))
+                gamma_aa = gamma_aa_opt.x
+                #turning gamma to alpha. a_0 = gamma_0, a_i = g_i - g_{i-1}
+                #aa_sol = np.zeros(aa_mk)
+                #exception for first iter
+                if aa_mk == 1:
+                    aa_sol[0] = 1
+                else:
+                    aa_sol[0] = gamma_aa[0]
+                    gm_cc = np.diff(gamma_aa)
+                    aa_sol = np.concatenate((aa_sol,gm_cc),axis=None)
+                    aa_sol = aa_sol/sum(aa_sol)
+            else:
+                aa_sol = [1]
+
+            if len(g_aa) >= aa_mk_outer and len(g_aa) != 0:
+                g_aa.pop(0)
+            g_aa.append(aa_gk)
+            z_test = sum([g_aa[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
+
+            if safeguard or R_AA_outer >= R_AA:
+                DD = 1.1
+                if np.linalg.norm(aa_gk) <= DD*aa_g0*(n_AA/R_AA +1)**(-1+aa_eps):
+                    z = z_test
+                    n_AA = n_AA+1
+                    safeguard = False
+                    R_AA_outer = 1
+                else:
+                    #z = z
+                    R_AA_outer = 0
+
 
         if VM_trigger:
             certificate = norm_incr * Hinv
@@ -293,7 +425,6 @@ def minimize_three_split(
             #certificate = norm_incr / step_size
         else:
             certificate = norm_incr / step_size
-
 
         if ls and h_Lipschitz is not None:
             if h_Lipschitz == 0:
