@@ -181,31 +181,24 @@ def minimize_three_split(
     fk, grad_fk = f_grad(z)
     x_old = x0
 
-    if anderson_inner !=0:
-        _,grad_fk_temp = f_grad(x0)
-        aa_yk = x0-step_size*grad_fk_temp
-        R_aa  = []
-        g_aa  = [] #Stores list of g_k = x_k-step_size*grad_fk
-        Y_aa  = []
-        S_aa  = []
-        aa_rk = np.zeros_like(x0)
-
-    #TODO merge with inner one?
-    if anderson_outer !=0:
-        _,grad_fk_temp = f_grad(x0)
-        aa_yk = x0-step_size*grad_fk_temp
-        R_aa  = []
-        g_aa  = [] #Stores list of g_k = x_k-step_size*grad_fk
-        Y_aa  = []
-        S_aa  = []
-        aa_rk = np.zeros_like(x0)
-        safeguard = True
-        R_AA_outer = 0
-        R_AA = 5
-
-      
     x = prox_1(z - step_size * grad_fk, step_size, *args_prox)
     u = np.zeros_like(x)
+
+    if anderson_inner !=0:
+        _,grad_fk_temp = f_grad(x0)
+        aa_yk_inner = x0-step_size*grad_fk_temp
+        aa_rk_inner = x-x0
+        R_aa_inner  = []
+        g_aa_inner  = [] #Stores list of g_k = x_k-step_size*grad_fk
+        aa_rk_inner = np.zeros_like(x0)
+
+    if anderson_outer !=0:
+        _,grad_fk_temp = f_grad(x0)
+        aa_yk_outer = x0-step_size*grad_fk_temp
+        aa_rk_outer = x-x0
+        R_aa_outer  = []
+        g_aa_outer  = [] #Stores list of g_k = x_k-step_size*grad_fk
+        aa_rk_outer = np.zeros_like(x0)
 
     delta = 2
     mu    = 10000
@@ -234,15 +227,48 @@ def minimize_three_split(
     else:
         bb_stab_delta_ls_trigger = False
 
-
     for it in range(max_iter):
-        grad_fk_old = grad_fk
-        fk, grad_fk = f_grad(z)
-        nm_bt_dq.append(fk)
 
         aa_mk_inner = min(anderson_inner,it)
         aa_mk_outer = min(anderson_outer,it)
+        #Anderson for Fixed Point Iteration. Zhang,O'Donoghue,Boyd
+        if anderson_outer != 0:
+            aa_gk_outer     = x #TODO ???
+            aa_rk_outer_old = aa_rk_outer
+            aa_rk_outer     = aa_gk_outer - aa_yk_outer
+            len_R = len(R_aa_outer)
+            if len_R >= aa_mk_outer and len_R != 0:
+                R_aa_outer.pop(0)
+            R_aa_outer.append(aa_rk_outer)
+            temp_aa = np.matmul(np.array(R_aa_outer),np.array(R_aa_outer).T) #R^T*R. TODO QR for resuability
+            one_R = np.ones(len(R_aa_outer))
+            lbd_aa = 1.0 #Regularized version. See Bach, Daspermont, Scieur
+            np.fill_diagonal(temp_aa,temp_aa.diagonal()+lbd_aa)
+            aa_sol = np.linalg.solve(temp_aa,one_R)
+            aa_sol = aa_sol/sum(aa_sol)
 
+            if len(g_aa_outer) >= aa_mk_outer and len(g_aa_outer) != 0:
+                g_aa_outer.pop(0)
+            g_aa_outer.append(aa_gk_outer)
+            y_test = sum([g_aa_outer[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
+            #TODO figure out checkpoint for diag VM
+            #Note: grad_fk is done on zk, but here using x to compare sufficient descent
+            #since we are doing AA only wrt xk. Thus one extra f_grad eval
+            x_test  = prox_1(y_test, step_size, *args_prox)
+            fx_test = f_grad(x_test, return_gradient=False) 
+            fx_old,grad_fk_old = f_grad(x_old)
+            print(fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old)- fz_test)
+            if fz_test <= fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old):
+                print('wwwwwwwwwwwwwwww',it)
+                x           = x_test
+                aa_yk_outer = aa_yk_outer
+            else:
+                z           = prox_1(aa_gk_outer,step_size,*args_prox)
+                aa_yk_outer = aa_gk_outer
+
+        grad_fk_old = grad_fk
+        fk, grad_fk = f_grad(z)
+        nm_bt_dq.append(fk)
 
         if VM_trigger and it > 1:
             sk = x - x_old
@@ -278,39 +304,24 @@ def minimize_three_split(
 
         #Mai-Johnson way. Doing AA on gradient term only as g,h may not have full domain?
         if anderson_inner != 0:
-            aa_gk = z - step_size*(u+grad_fk)
-            aa_rk_old = aa_rk
-            aa_rk =  aa_gk - aa_yk
-            len_R = len(R_aa)
+            aa_gk_inner     = z - step_size*(u+grad_fk)
+            aa_rk_inner_old = aa_rk_inner
+            aa_rk_inner     = aa_gk_inner - aa_yk_inner
+            len_R = len(R_aa_inner)
             if len_R >= aa_mk_inner and len_R != 0:
-                R_aa.pop(0)
-            R_aa.append(aa_rk)
-            temp_aa = np.matmul(np.array(R_aa),np.array(R_aa).T) #R^T*R. TODO QR
-            one_R = np.ones(len(R_aa))
+                R_aa_inner.pop(0)
+            R_aa_inner.append(aa_rk_inner)
+            temp_aa = np.matmul(np.array(R_aa_inner),np.array(R_aa_inner).T) #R^T*R. TODO QR for resuability
+            one_R = np.ones(len(R_aa_inner))
             lbd_aa = 1.0 #Regularized version. See Bach, Daspermont, Scieur
             np.fill_diagonal(temp_aa,temp_aa.diagonal()+lbd_aa)
             aa_sol = np.linalg.solve(temp_aa,one_R)
-#            [u_svd,s_svd,vh_svd] = np.linalg.svd(temp_aa) #truncated svd. no difference
-#            s_svd_trun = np.where(s_svd < 1.e-12,0,s_svd)
-#            aa_sol = (vh_svd.T*s_svd_trun*u_svd.T) @ one_R
             aa_sol = aa_sol/sum(aa_sol)
 
-            if len(g_aa) >= aa_mk_inner and len(g_aa) != 0:
-                g_aa.pop(0)
-            g_aa.append(aa_gk)
-            y_test = sum([g_aa[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
-            x_test = prox_1(y_test, step_size, *args_prox)
-            fx_test = f_grad(x_test, return_gradient=False) 
-            fx_old,grad_fk_old = f_grad(x_old)  #Maybe from previous iter still holds here?
-
-            print( fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old)- fx_test)
-            if fx_test <= fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old):
-                print('wwwwwwwwwwwwwwww',it)
-                x = x_test
-                aa_yk = aa_yk
-            else:
-                x = prox_1(aa_gk,step_size,*args_prox)
-                aa_yk = aa_gk
+            if len(g_aa_inner) >= aa_mk_inner and len(g_aa_inner) != 0:
+                g_aa_inner.pop(0)
+            g_aa_inner.append(aa_gk_inner)
+            y_test = sum([g_aa_inner[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
 
         x_old = x
 
@@ -319,6 +330,22 @@ def minimize_three_split(
                 x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
             else:
                 x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
+        else:
+            #TODO figure out checkpoint for diag VM
+            #Note: grad_fk is done on zk, but here using x to compare sufficient descent
+            #since we are doing AA only wrt xk. Thus one extra f_grad eval
+            x_test  = prox_1(y_test, step_size, *args_prox)
+            fx_test = f_grad(x_test, return_gradient=False) 
+            fx_old,grad_fk_old = f_grad(x_old)
+            print(fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old)- fz_test)
+            if fz_test <= fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old):
+                print('wwwwwwwwwwwwwwww',it)
+                x           = x_test
+                aa_yk_inner = aa_yk_inner
+            else:
+                z           = prox_1(aa_gk_inner,step_size,*args_prox)
+                aa_yk_inner = aa_gk_inner
+
 
         incr = x - z
         norm_incr = np.linalg.norm(incr)
@@ -352,72 +379,6 @@ def minimize_three_split(
             z = prox_2(x + step_size * u, step_size, *args_prox)
             u += (x - z) / step_size
 
-        #Notation here:
-        #z     := z_TOS^{k+1}
-        #z_old := z^k
-        #aa_gk := z - z_old := v^k - v_{TOS}^{k+1}
-        #Anderson for Fixed Point Iteration. Fu,Zhang,Boyd.
-        #Using z vector here
-        if anderson_outer != 0:
-            fk_z, grad_fk_z = f_grad(z)
-            #TODO aa_gk is overall residual... not just gradient term
-            aa_gk = z - z_old
-            #aa_gk = z - step_size*(u+grad_fk)
-            aa_rk_old = aa_rk
-            aa_rk =  aa_gk - aa_yk
-            len_S = len(S_aa)
-            len_Y = len(Y_aa)
-            if len_S >= aa_mk_outer and len_S != 0:
-                S_aa.pop(0)
-            if len_Y >= aa_mk_outer and len_Y != 0:
-                Y_aa.pop(0)
-            S_aa.append(z - z_old)
-            Y_aa.append(aa_rk - aa_rk_old)
-
-            def reg_aa(x,S,Y,g):
-                S = np.array(S)
-                Y = np.array(Y)
-                eta = 1.
-                SY = np.linalg.norm(S)**2 + np.linalg.norm(Y)**2
-                return np.linalg.norm(g- Y.T @ x)**2 + eta*SY*np.dot(x,x)
-            
-            if aa_mk_outer == 0:
-                x0_aa = np.zeros(1)
-            else:
-                x0_aa = np.zeros(aa_mk_outer)
-
-            if it >0:
-                gamma_aa_opt = sp.optimize.minimize(reg_aa,x0_aa,method='nelder-mead',args=(S_aa,Y_aa,aa_rk))
-                gamma_aa = gamma_aa_opt.x
-                #turning gamma to alpha. a_0 = gamma_0, a_i = g_i - g_{i-1}
-                #aa_sol = np.zeros(aa_mk)
-                #exception for first iter
-                if aa_mk == 1:
-                    aa_sol[0] = 1
-                else:
-                    aa_sol[0] = gamma_aa[0]
-                    gm_cc = np.diff(gamma_aa)
-                    aa_sol = np.concatenate((aa_sol,gm_cc),axis=None)
-                    aa_sol = aa_sol/sum(aa_sol)
-            else:
-                aa_sol = [1]
-
-            if len(g_aa) >= aa_mk_outer and len(g_aa) != 0:
-                g_aa.pop(0)
-            g_aa.append(aa_gk)
-            z_test = sum([g_aa[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
-
-            if safeguard or R_AA_outer >= R_AA:
-                DD = 1.1
-                if np.linalg.norm(aa_gk) <= DD*aa_g0*(n_AA/R_AA +1)**(-1+aa_eps):
-                    z = z_test
-                    n_AA = n_AA+1
-                    safeguard = False
-                    R_AA_outer = 1
-                else:
-                    #z = z
-                    R_AA_outer = 0
-
 
         if VM_trigger:
             certificate = norm_incr * Hinv
@@ -439,6 +400,7 @@ def minimize_three_split(
                 break
    
         if it > 0 and certificate < tol:
+            #TODO barrier with callback func while using the logger??
             if barrier != None:
                 if barrier > 1.e-12:
                     barrier /= 1.1
