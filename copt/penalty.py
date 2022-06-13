@@ -273,22 +273,15 @@ class TraceNorm:
 
     def prox(self, x, step_size):
         X = x.reshape(self.shape)
-        if type(self.H) is not int:
-            Hmat = self.H.reshape(self.shape)
-            import pdb
-            pdb.set_trace()
         U, s, Vt = linalg.svd(X, full_matrices=False)
         if type(self.H) is int:
             s_threshold = np.fmax(s - self.alpha * step_size, 0) - np.fmax(
                 -s - self.alpha * step_size, 0 )
         else:
-            s_threshold = np.fmax(s - self.alpha , 0) - np.fmax(
-                -s - self.alpha , 0 )
-        if type(self.H) is int:
-            return (U * s_threshold).dot(Vt).ravel()
-        else:
-            return (Hmat *(U * s_threshold).dot(Vt)).ravel()
-        #TODO i think its right? investigate later... extension from 10.1137/080738970
+            s_threshold = np.fmax(s - (1/self.H)*(self.alpha), 0) - np.fmax(
+                -s - (1/self.H)*(self.alpha), 0)
+
+        return (U * s_threshold).dot(Vt).ravel()
 
     def prox_factory(self):
         raise NotImplementedError
