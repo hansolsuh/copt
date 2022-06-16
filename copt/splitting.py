@@ -40,6 +40,7 @@ def minimize_three_split(
     hcopt=None,
     Hinv=None,
     total_func=None,
+    vm_type=None,
     anderson_inner=0,
     anderson_outer=0,
     args_prox=(),
@@ -118,6 +119,8 @@ def minimize_three_split(
         Trigger for Anderson-Acceleration. 0 means off, int>0 means size of memory for AA
         This is for fixed-point of the algorithm as a whole. See Fu,Zhang,Boyd.
 
+      vm_type : int, optional
+        Sets type of variable metric. 1 is for Barzili-Borwein type, and 2 is for Malitsky-Mishenko type.
 
 
     Returns:
@@ -174,6 +177,9 @@ def minimize_three_split(
         line_search = True
         step_size = 1.0 / utils.init_lipschitz(f_grad, x0)
 
+    if vm_type is None:
+        vm_type = 1 #TODO default BB or MM??
+
     z_old = x0
     z = prox_2(x0, step_size, *args_prox)
     LS_EPS = np.finfo(np.float).eps
@@ -227,6 +233,11 @@ def minimize_three_split(
     else:
         bb_stab_delta_ls_trigger = False
 
+    theta = np.infty
+    Theta = np.infty
+    a_bb1 = step_size
+    a_bb2 = step_size
+
     for it in range(max_iter):
 
         aa_mk_inner = min(anderson_inner,it)
@@ -271,31 +282,41 @@ def minimize_three_split(
         nm_bt_dq.append(fk)
 
         if VM_trigger and it > 1:
+            #MM version
+            #a_bb1 = \Lambda
+            #a_bb2 = \lambda
             sk = x - x_old
             yk = grad_fk - grad_fk_old #TODO grad_f(x) not z?
             sy = dot(sk,yk)
             ss = dot(sk,sk)
             yy = dot(yk,yk)
+            sk_norm = np.linalg.norm(sk)
+            yk_norm = np.linalg.norm(yk)
 
             if it > 2:
                 a_bb1_old = a_bb1
                 a_bb2_old = a_bb2
-            a_bb1 = ss/sy
-            a_bb2 = sy/yy
 
-            if a_bb1 < 0:
-                a_bb1 = a_bb1_old
-            if a_bb2 < 0:
-                a_bb2 = a_bb2_old
+            if vm_type == 1:
+                a_bb1 = ss/sy
+                a_bb2 = sy/yy
+            else: #TODO check 2 else throw error
+                a_bb2 = min(np.sqrt(1+theta/2)*a_bb2, sk_norm/(2*yk_norm))
+                a_bb1 = min(np.sqrt(1+Theta/2)*a_bb1, yk_norm/(2*sk_norm))
 
-            #Stablization
-            if it < 4 and bb_stab_delta_ls_trigger:
+            if it < 4 and bb_stab_delta_ls_trigger and vm_type == 1:
                 norm_sk = min(norm_sk,np.linalg.norm(sk))
             if bb_stab_delta_ls_trigger:
                 if it >= 4:
                     bb_stab_delta = 2*norm_sk
                     line_search = False
                 a_bb2 = min(a_bb2, bb_stab_delta/np.linalg.norm(grad_fk))
+                #TODO a_bb2 <= a_bb1 check??
+
+            if a_bb1 < 0:
+                a_bb1 = a_bb1_old
+            if a_bb2 < 0:
+                a_bb2 = a_bb2_old
 
             a1_list.append(a_bb1)
             a2_list.append(a_bb2)
