@@ -239,7 +239,6 @@ def minimize_three_split(
     a_bb2 = step_size
 
     for it in range(max_iter):
-
         aa_mk_inner = min(anderson_inner,it)
         aa_mk_outer = min(anderson_outer,it)
         #Anderson for Fixed Point Iteration. Zhang,O'Donoghue,Boyd
@@ -302,7 +301,7 @@ def minimize_three_split(
                 a_bb2 = sy/yy
             else: #TODO check 2 else throw error
                 a_bb2 = min(np.sqrt(1+theta/2)*a_bb2, sk_norm/(2*yk_norm))
-                a_bb1 = min(np.sqrt(1+Theta/2)*a_bb1, yk_norm/(2*sk_norm))
+                a_bb1 = max((1./np.sqrt(1+Theta/2))*a_bb1, (2*sk_norm)/yk_norm)
 
             if it < 4 and bb_stab_delta_ls_trigger and vm_type == 1:
                 norm_sk = min(norm_sk,np.linalg.norm(sk))
@@ -311,12 +310,15 @@ def minimize_three_split(
                     bb_stab_delta = 2*norm_sk
                     line_search = False
                 a_bb2 = min(a_bb2, bb_stab_delta/np.linalg.norm(grad_fk))
-                #TODO a_bb2 <= a_bb1 check??
 
             if a_bb1 < 0:
                 a_bb1 = a_bb1_old
             if a_bb2 < 0:
                 a_bb2 = a_bb2_old
+
+            if vm_type == 2 and it > 2:
+                theta = a_bb2/a_bb2_old
+                Theta = a_bb1/a_bb1_old
 
             a1_list.append(a_bb1)
             a2_list.append(a_bb2)
