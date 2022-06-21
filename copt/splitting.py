@@ -227,7 +227,9 @@ def minimize_three_split(
 
     if VM_trigger and not line_search:        
         bb_stab_delta_ls_trigger = True
-        line_search = True
+        line_search  = True
+        sx_norm_list = []
+        sx_list_len  = 10
         #Setting temporary trigger
         #For BB, initially do non-stab to see the magnitude of \|s_k\|
     else:
@@ -303,12 +305,15 @@ def minimize_three_split(
                 a_bb2 = min(np.sqrt(1+theta/2)*a_bb2, sk_norm/(2*yk_norm))
                 a_bb1 = max((1./np.sqrt(1+Theta/2))*a_bb1, (2*sk_norm)/yk_norm)
 
-            if it < 4 and bb_stab_delta_ls_trigger and vm_type == 1:
-                norm_sk = min(norm_sk,np.linalg.norm(sk))
-            if bb_stab_delta_ls_trigger:
-                if it >= 4:
-                    bb_stab_delta = 2*norm_sk
-                    line_search = False
+            #TODO linesearch or stab for MM method? Theoratically MM should conv wo stab but not in practice?      
+            if bb_stab_delta_ls_trigger and vm_type == 1:
+                if len(sx_norm_list) >= sx_list_len and len(sx_norm_list) != 0:
+                    sx_norm_list.pop(0)
+                sx_norm_list.append(np.linalg.norm(sk))
+                if it <= 5:
+                    bb_stab_delta = np.infty
+                else:
+                    bb_stab_delta = 2*min(sx_norm_list)
                 a_bb2 = min(a_bb2, bb_stab_delta/np.linalg.norm(grad_fk))
 
             if a_bb1 < 0:
