@@ -32,7 +32,6 @@ def minimize_three_split(
     callback=None,
     line_search=True,
     step_size=None,
-    L_Lip=None,
     max_iter_backtracking=100,
     backtracking_factor=0.7,
     h_Lipschitz=None,
@@ -43,10 +42,10 @@ def minimize_three_split(
     vm_type=None,
     anderson_inner=0,
     anderson_outer=0,
+    sbb_n=None,
     args_prox=(),
 ):
 
-    #TODO note: Hinv is actually H.... notational mistake...
     """Davis-Yin three operator splitting method.
 
     This algorithm can solve problems of the form
@@ -122,6 +121,9 @@ def minimize_three_split(
       vm_type : int, optional
         Sets type of variable metric. 1 is for Barzili-Borwein type, and 2 is for Malitsky-Mishenko type.
 
+      sbb_n : int, optional
+        Chooses option for stabilized Barzilai-Borwein Delta. None, or 0, which is default, is min(\|s_1\|,\|s_2\|,\|s_3\|), and
+        any other number would be length of queue for min(\|s_i\|,...,\|s_{i-n}\|)
 
     Returns:
       res : OptimizeResult
@@ -178,7 +180,10 @@ def minimize_three_split(
         step_size = 1.0 / utils.init_lipschitz(f_grad, x0)
 
     if vm_type is None:
-        vm_type = 1 #TODO default BB or MM??
+        vm_type = 1
+
+    if sbb_n is None:
+        sbb_n = 0
 
     z_old = x0
     z = prox_2(x0, step_size, *args_prox)
@@ -218,7 +223,6 @@ def minimize_three_split(
     Fval_list = []
     M_ls = 5
     b_ls = 1/0.7
-    step_list = []
     nm_bt =5 #Size of deque for non-monotonic linesearch
     nm_bt_dq = deque(nm_bt*[0],nm_bt)
 
@@ -227,9 +231,8 @@ def minimize_three_split(
 
     if VM_trigger and not line_search:        
         bb_stab_delta_ls_trigger = True
-        line_search  = True
+       # line_search  = True
         sx_norm_list = []
-        sx_list_len  = 10
         #Setting temporary trigger
         #For BB, initially do non-stab to see the magnitude of \|s_k\|
     else:
@@ -241,42 +244,6 @@ def minimize_three_split(
     a_bb2 = step_size
 
     for it in range(max_iter):
-        aa_mk_inner = min(anderson_inner,it)
-        aa_mk_outer = min(anderson_outer,it)
-        #Anderson for Fixed Point Iteration. Zhang,O'Donoghue,Boyd
-        if anderson_outer != 0:
-            aa_gk_outer     = x #TODO ???
-            aa_rk_outer_old = aa_rk_outer
-            aa_rk_outer     = aa_gk_outer - aa_yk_outer
-            len_R = len(R_aa_outer)
-            if len_R >= aa_mk_outer and len_R != 0:
-                R_aa_outer.pop(0)
-            R_aa_outer.append(aa_rk_outer)
-            temp_aa = np.matmul(np.array(R_aa_outer),np.array(R_aa_outer).T) #R^T*R. TODO QR for resuability
-            one_R = np.ones(len(R_aa_outer))
-            lbd_aa = 1.0 #Regularized version. See Bach, Daspermont, Scieur
-            np.fill_diagonal(temp_aa,temp_aa.diagonal()+lbd_aa)
-            aa_sol = np.linalg.solve(temp_aa,one_R)
-            aa_sol = aa_sol/sum(aa_sol)
-
-            if len(g_aa_outer) >= aa_mk_outer and len(g_aa_outer) != 0:
-                g_aa_outer.pop(0)
-            g_aa_outer.append(aa_gk_outer)
-            y_test = sum([g_aa_outer[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
-            #TODO figure out checkpoint for diag VM
-            #Note: grad_fk is done on zk, but here using x to compare sufficient descent
-            #since we are doing AA only wrt xk. Thus one extra f_grad eval
-            x_test  = prox_1(y_test, step_size, *args_prox)
-            fx_test = f_grad(x_test, return_gradient=False) 
-            fx_old,grad_fk_old = f_grad(x_old)
-            print(fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old)- fz_test)
-            if fz_test <= fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old):
-                print('wwwwwwwwwwwwwwww',it)
-                x           = x_test
-                aa_yk_outer = aa_yk_outer
-            else:
-                z           = prox_1(aa_gk_outer,step_size,*args_prox)
-                aa_yk_outer = aa_gk_outer
 
         grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
@@ -287,7 +254,7 @@ def minimize_three_split(
             #a_bb1 = \Lambda
             #a_bb2 = \lambda
             sk = x - x_old
-            yk = grad_fk - grad_fk_old #TODO grad_f(x) not z?
+            yk = grad_fk - grad_fk_old
             sy = dot(sk,yk)
             ss = dot(sk,sk)
             yy = dot(yk,yk)
@@ -301,20 +268,31 @@ def minimize_three_split(
             if vm_type == 1:
                 a_bb1 = ss/sy
                 a_bb2 = sy/yy
-            else: #TODO check 2 else throw error
+            else:
                 a_bb2 = min(np.sqrt(1+theta/2)*a_bb2, sk_norm/(2*yk_norm))
                 a_bb1 = max((1./np.sqrt(1+Theta/2))*a_bb1, (2*sk_norm)/yk_norm)
 
-            #TODO linesearch or stab for MM method? Theoratically MM should conv wo stab but not in practice?      
-            if bb_stab_delta_ls_trigger and vm_type == 1:
-                if len(sx_norm_list) >= sx_list_len and len(sx_norm_list) != 0:
-                    sx_norm_list.pop(0)
-                sx_norm_list.append(np.linalg.norm(sk))
-                if it <= 5:
-                    bb_stab_delta = np.infty
-                else:
-                    bb_stab_delta = 2*min(sx_norm_list)
-                a_bb2 = min(a_bb2, bb_stab_delta/np.linalg.norm(grad_fk))
+            if sbb_n == 0:
+                if it < 4 and bb_stab_delta_ls_trigger and vm_type == 1:
+                    norm_sk = min(norm_sk,np.linalg.norm(sk))
+                if bb_stab_delta_ls_trigger and vm_type==1:
+                    if it >= 4:
+                        bb_stab_delta = 2*norm_sk
+                    else: 
+                        bb_stab_delta = np.infty
+                    a_bb2 = min(a_bb2, bb_stab_delta/np.linalg.norm(grad_fk))
+            else:
+                if bb_stab_delta_ls_trigger and vm_type == 1:
+                    if len(sx_norm_list) >= sbb_n and len(sx_norm_list) != 0:
+                        sx_norm_list.pop(0)
+                    sx_norm_list.append(np.linalg.norm(sk))
+                    if it <= 5:
+                        bb_stab_delta = np.infty
+                    else:
+                        bb_stab_delta = 2*min(sx_norm_list)
+                    a_bb2 = min(a_bb2, bb_stab_delta/np.linalg.norm(grad_fk))
+
+
 
             if a_bb1 < 0:
                 a_bb1 = a_bb1_old
@@ -330,51 +308,13 @@ def minimize_three_split(
             Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
             Hinv_avglist.append(np.average(Hinv))
 
-        #Mai-Johnson way. Doing AA on gradient term only as g,h may not have full domain?
-        if anderson_inner != 0:
-            aa_gk_inner     = z - step_size*(u+grad_fk)
-            aa_rk_inner_old = aa_rk_inner
-            aa_rk_inner     = aa_gk_inner - aa_yk_inner
-            len_R = len(R_aa_inner)
-            if len_R >= aa_mk_inner and len_R != 0:
-                R_aa_inner.pop(0)
-            R_aa_inner.append(aa_rk_inner)
-            temp_aa = np.matmul(np.array(R_aa_inner),np.array(R_aa_inner).T) #R^T*R. TODO QR for resuability
-            one_R = np.ones(len(R_aa_inner))
-            lbd_aa = 1.0 #Regularized version. See Bach, Daspermont, Scieur
-            np.fill_diagonal(temp_aa,temp_aa.diagonal()+lbd_aa)
-            aa_sol = np.linalg.solve(temp_aa,one_R)
-            aa_sol = aa_sol/sum(aa_sol)
-
-            if len(g_aa_inner) >= aa_mk_inner and len(g_aa_inner) != 0:
-                g_aa_inner.pop(0)
-            g_aa_inner.append(aa_gk_inner)
-            y_test = sum([g_aa_inner[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
-
         x_old = x
 
-        if anderson_inner == 0:
-            if VM_trigger and it > 1:
-                x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
-            else:
-                x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
+        if VM_trigger and it > 1:
+            x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
         else:
-            #TODO figure out checkpoint for diag VM
-            #Note: grad_fk is done on zk, but here using x to compare sufficient descent
-            #since we are doing AA only wrt xk. Thus one extra f_grad eval
-            x_test  = prox_1(y_test, step_size, *args_prox)
-            fx_test = f_grad(x_test, return_gradient=False) 
-            fx_old,grad_fk_old = f_grad(x_old)
-            print(fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old)- fz_test)
-            if fz_test <= fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old):
-                print('wwwwwwwwwwwwwwww',it)
-                x           = x_test
-                aa_yk_inner = aa_yk_inner
-            else:
-                z           = prox_1(aa_gk_inner,step_size,*args_prox)
-                aa_yk_inner = aa_gk_inner
-
-
+            x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
+        
         incr = x - z
         norm_incr = np.linalg.norm(incr)
     
@@ -395,7 +335,8 @@ def minimize_three_split(
                     break
                 else:
                     if VM_trigger and it>1:
-                        Hinv *= b_ls
+                        Hinv /= backtracking_factor
+
                     else:
                         step_size *= backtracking_factor
 
@@ -411,7 +352,6 @@ def minimize_three_split(
         if VM_trigger:
             certificate = norm_incr * Hinv
             certificate = np.max(certificate)
-            #certificate = norm_incr / step_size
         else:
             certificate = norm_incr / step_size
 
@@ -432,7 +372,6 @@ def minimize_three_split(
             if barrier != None:
                 if barrier > 1.e-12:
                     barrier /= 1.1
-                    #print("it, barrier :", it,barrier)
                 else:
                     success = True
                     break
@@ -440,7 +379,7 @@ def minimize_three_split(
                 success = True
                 break
 
-        step_list.append(step_size)
+
     return optimize.OptimizeResult(
         x=x, success=success, nit=it, certificate=certificate, step_size=step_size
     )
