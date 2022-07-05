@@ -40,8 +40,6 @@ def minimize_three_split(
     Hinv=None,
     total_func=None,
     vm_type=None,
-    anderson_inner=0,
-    anderson_outer=0,
     sbb_n=None,
     args_prox=(),
 ):
@@ -110,14 +108,6 @@ def minimize_three_split(
       total_func : float, optional
         Evaluate function value of overall problem.
 
-      anderson_inner : int, optional
-        Trigger for Anderson-Acceleration. 0 means off, int>0 means size of memory for AA
-        This for inner part - only acts on gradient part. See Mai and Johansson
-
-      anderson_outer : int, optional
-        Trigger for Anderson-Acceleration. 0 means off, int>0 means size of memory for AA
-        This is for fixed-point of the algorithm as a whole. See Fu,Zhang,Boyd.
-
       vm_type : int, optional
         Sets type of variable metric. 1 is for Barzili-Borwein type, and 2 is for Malitsky-Mishenko type.
 
@@ -159,17 +149,10 @@ def minimize_three_split(
         def prox_2(x, s, *args):
             return x
 
-
     x0_temp = np.copy(x0)
 
     n = x0.size
     VM_trigger = 1
-
-    if anderson_inner is None:
-        anderson_inner = 0
-
-    if anderson_outer is None:
-        anderson_outer = 0
 
     if Hinv is None:
         Hinv = np.ones(n)
@@ -195,21 +178,6 @@ def minimize_three_split(
     x = prox_1(z - step_size * grad_fk, step_size, *args_prox)
     u = np.zeros_like(x)
 
-    if anderson_inner !=0:
-        _,grad_fk_temp = f_grad(x0)
-        aa_yk_inner = x0-step_size*grad_fk_temp
-        aa_rk_inner = x-x0
-        R_aa_inner  = []
-        g_aa_inner  = [] #Stores list of g_k = x_k-step_size*grad_fk
-        aa_rk_inner = np.zeros_like(x0)
-
-    if anderson_outer !=0:
-        _,grad_fk_temp = f_grad(x0)
-        aa_yk_outer = x0-step_size*grad_fk_temp
-        aa_rk_outer = x-x0
-        R_aa_outer  = []
-        g_aa_outer  = [] #Stores list of g_k = x_k-step_size*grad_fk
-        aa_rk_outer = np.zeros_like(x0)
 
     delta = 2
     mu    = 10000
@@ -231,10 +199,7 @@ def minimize_three_split(
 
     if VM_trigger and not line_search:        
         bb_stab_delta_ls_trigger = True
-       # line_search  = True
         sx_norm_list = []
-        #Setting temporary trigger
-        #For BB, initially do non-stab to see the magnitude of \|s_k\|
     else:
         bb_stab_delta_ls_trigger = False
 
@@ -242,7 +207,7 @@ def minimize_three_split(
     Theta = np.infty
     a_bb1 = step_size
     a_bb2 = step_size
-
+    
     for it in range(max_iter):
 
         grad_fk_old = grad_fk
@@ -250,9 +215,6 @@ def minimize_three_split(
         nm_bt_dq.append(fk)
 
         if VM_trigger and it > 1:
-            #MM version
-            #a_bb1 = \Lambda
-            #a_bb2 = \lambda
             sk = x - x_old
             yk = grad_fk - grad_fk_old
             sy = dot(sk,yk)
@@ -269,6 +231,9 @@ def minimize_three_split(
                 a_bb1 = ss/sy
                 a_bb2 = sy/yy
             else:
+                #MM version
+                #a_bb1 = \Lambda
+                #a_bb2 = \lambda
                 a_bb2 = min(np.sqrt(1+theta/2)*a_bb2, sk_norm/(2*yk_norm))
                 a_bb1 = max((1./np.sqrt(1+Theta/2))*a_bb1, (2*sk_norm)/yk_norm)
 
