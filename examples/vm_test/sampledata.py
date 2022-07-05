@@ -97,36 +97,3 @@ class h_copt:
         out = np.ravel(out)
         return fval, out
 
-
-
-# rand('twister',1111)
-# A = rand(100,100);
-# rand('twister',1112)
-# b = rand(200);
-# rand('twister',1112)
-# b = rand(200,1);
-# rand('twister',1113)
-# l3 = rand(100,1)*10;
-# q,r = qr(A);
-#
-# [q,r] = qr(A);
-# l1 = linspace(1,10,100);
-# l2 = linspace(1,1000,100);
-# C11 = q.* diag(l1) * q';
-# C12 = q.* diag(l3) * q';
-# C22 = q.* diag(l2) * q';
-# zz = zeros(100,100);
-# MM = [C11,C12; zz,C22];
-# spy(MM)
-# lss = lasso(MM,b,'Lambda',1.e-8);
-# plot(lss)
-# solvePO
-# cvx_begin
-# cvx_precision best
-# variables x_cvx(200,1)
-#
-# minimize .5*norm(MM*x_cvx - b) + 1.e-8*sum(abs(x_cvx));
-# subject to:
-#     x_cvx >= 0;
-# cvx_end
-

@@ -32,7 +32,10 @@ class f1_copt:
     def prox(self,x, step_size):
         step_size = np.real(step_size)
 #        out = x - (1/self.H)*self.lbd*step_size*self.e
-        out = x - (1/self.H)*self.lbd*self.e
+        if self.H is None or isinstance(self.H,int):
+            out = x - step_size*self.lbd*self.e
+        else:
+            out = x - (1/self.H)*self.lbd*self.e
         return np.ravel(out)
     def f_grad(self,x,return_gradient=True):
         fval = self.lbd*np.dot(self.e,x)

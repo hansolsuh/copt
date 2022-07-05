@@ -5,7 +5,6 @@ import numpy as np
 
 def generate_data():
     #Matlab Portfolio Opt Data
-       
     Sigma = np.loadtxt('dydata/sigma.txt')            
     m = np.loadtxt('dydata/m.txt')
     r = np.loadtxt('dydata/r.txt')
@@ -36,20 +35,11 @@ class f2_copt:
         return np.sum(x)
     def prox(self,x, step_size):
         step_size = np.real(step_size)
-        #Compute Theta first
-        # Theta = (cumsum(x)-1) / (cumsum(Hinv) (or 1:N for int case)
-#        y = np.sort(x)[::-1]
         idx_sort = np.argsort(x)[::-1]
         y = x[idx_sort]
         cumsum_list = (np.cumsum(y)-1)
         n = x.size
-#        if type(self.H) is int:
         temp        = np.arange(1,n+1)
-#        else:
-#            H_sorted = self.H[idx_sort]
-#            temp        = np.cumsum(H_sorted)
-#            y = y*H_sorted
-
         cumsum_list = cumsum_list/temp
         temp        = cumsum_list[np.sum(y>cumsum_list)-1]
         out         = np.maximum(x-temp,0)
@@ -61,9 +51,6 @@ class f3_copt:
         self.H = H
         self.r = r
         self.m = m
-#        self.rnorm = np.linalg.norm(r,'2')
-#    def __call__(self,x):
-#        return self.f_grad(x,return_gradient=False)
     def prox(self,x, step_size):
         nn = np.dot(self.m,self.H * self.m)
         out = x - np.maximum(np.dot(self.m/nn,x) + (self.r/nn),0)*self.m 
