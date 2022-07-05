@@ -55,8 +55,9 @@ all_trace_ls_time, all_trace_nols_time, all_trace_pdhg_nols_time, all_trace_pdhg
 out_img = []
 for i, beta in enumerate(all_betas):
     print('beta = %s' % beta)
-    G1 = copt.penalty.GroupL1(beta, groups[::2])
-    G2 = copt.penalty.GroupL1(beta, groups[1::2])
+    e = np.ones(n_features)
+    G1 = copt.penalty.GroupL1(beta, groups[::2],e)
+    G2 = copt.penalty.GroupL1(beta, groups[1::2],e)
 
     def loss(x):
         return f(x) + G1(x) + G2(x)
