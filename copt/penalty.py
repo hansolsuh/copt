@@ -16,12 +16,8 @@ class L1Norm:
 
   """
 
-    def __init__(self, alpha, H):
+    def __init__(self, alpha):
         self.alpha = alpha
-        if H is None:
-            self.H = 1
-        else:
-            self.H = H
 
     def __call__(self, x):
         return self.alpha * np.abs(x).sum()
@@ -33,12 +29,12 @@ class L1Norm:
         minimize_proximal_gradient, minimize_three_split and
         minimize_primal_dual.
         """
-        if np.average(self.H) == 1:
+        if isinstance(step_size, np.ndarray):
+            return np.fmax(x - (1/step_size)*(self.alpha), 0) - np.fmax(
+                -x - (1/step_Size)*(self.alpha), 0)
+        else:
             return np.fmax(x - (self.alpha * step_size), 0) - np.fmax(
                 -x - (self.alpha * step_size), 0)
-        else:
-            return np.fmax(x - (1/self.H)*(self.alpha), 0) - np.fmax(
-                -x - (1/self.H)*(self.alpha), 0)
 
 
     def prox_factory(self, n_features):
@@ -256,14 +252,10 @@ class TraceNorm:
 
     is_separable = False
 
-    def __init__(self, alpha, shape,H):
+    def __init__(self, alpha, shape):
         assert len(shape) == 2
         self.shape = shape
         self.alpha = alpha
-        if H is None:
-            self.H = 1
-        else:
-            self.H = H
 
     def __call__(self, x):
         X = x.reshape(self.shape)
@@ -272,12 +264,8 @@ class TraceNorm:
     def prox(self, x, step_size):
         X = x.reshape(self.shape)
         U, s, Vt = linalg.svd(X, full_matrices=False)
-        if type(self.H) is int:
-            s_threshold = np.fmax(s - self.alpha * step_size, 0) - np.fmax(
+        s_threshold = np.fmax(s - self.alpha * step_size, 0) - np.fmax(
                 -s - self.alpha * step_size, 0 )
-        else:
-            s_threshold = np.fmax(s - (1/self.H)*(self.alpha), 0) - np.fmax(
-                -s - (1/self.H)*(self.alpha), 0)
 
         return (U * s_threshold).dot(Vt).ravel()
 
