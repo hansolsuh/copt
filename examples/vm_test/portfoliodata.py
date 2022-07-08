@@ -56,13 +56,19 @@ class f2_copt:
         out         = np.maximum(x-temp,0)
         return np.ravel(out)
 
-#Project Hyperplane
+#Project Half Space 
+#For <m,x> >= r
 class f3_copt:
     def __init__(self, r,m):
         self.r = r
         self.m = m
     def prox(self,x, step_size):
+        mx = np.dot(self.m,x)
+        if mx <= -self.r:
+            return np.copy(x)
+
         nn = np.dot(self.m, self.m)
-        out = x - np.maximum(np.dot(self.m/nn,x) + (self.r/nn),0)*self.m 
+        #out = x - (1/step_size)*(np.maximum(mx + self.r,0)/nn)*self.m 
+        out = x - (np.maximum(mx + self.r,0)/nn)*self.m 
         return np.ravel(out)
 
