@@ -276,7 +276,7 @@ def minimize_three_split(
         x_old = x
 
         if VM_trigger and it > 1:
-            x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
+            x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1/Hinv, *args_prox)
         else:
             x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
         
@@ -307,7 +307,7 @@ def minimize_three_split(
 
         z_old = z
         if VM_trigger and it > 1:
-            z = prox_2(x + (1/Hinv)* u, 1, *args_prox)
+            z = prox_2(x + (1/Hinv)* u, 1/Hinv, *args_prox)
             u += (x - z) / (1/Hinv)
         else:
             z = prox_2(x + step_size * u, step_size, *args_prox)

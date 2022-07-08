@@ -75,7 +75,7 @@ class GroupL1:
 
   """
 
-    def __init__(self, alpha, groups, H):
+    def __init__(self, alpha, groups):
         self.alpha = alpha
         # groups need to be increasing
         for i, g in enumerate(groups):
@@ -84,10 +84,6 @@ class GroupL1:
             if i > 0 and groups[i - 1][-1] >= g[0]:
                 raise ValueError("Groups must be increasing")
         self.groups = groups
-        if H is None:
-            self.H = 1
-        else:
-            self.H = H #TODO make "subscriptable" int 1 ?
 
     def __call__(self, x):
         return self.alpha * np.sum([np.linalg.norm(x[g]) for g in self.groups])
@@ -95,12 +91,14 @@ class GroupL1:
     def prox(self, x, step_size):
         out = x.copy()
         for g in self.groups:
-
             norm = np.linalg.norm(x[g])
-            if norm > self.alpha * step_size:
-                out[g] -= step_size * self.alpha * out[g] * (1/self.H[g]) / norm
-            else:
-                out[g] = 0
+            if isinstance(step_size,np.ndarray):
+                out[g] = np.maximum(1-self.alpha/((1/step_size[g])*norm),0)*out[g]
+            else:   
+                if norm > self.alpha * step_size:
+                    out[g] -= step_size * self.alpha * out[g] / norm
+                else:
+                    out[g] = 0
         return out
 
     def prox_factory(self, n_features):

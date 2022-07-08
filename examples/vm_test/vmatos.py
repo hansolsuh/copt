@@ -66,8 +66,8 @@ if __name__ == "__main__":
             #1. VM : BB LS version
             mu     = np.array(1.e-6)
             Hinv1  = np.ones(n)
-            h_copt = tomodata.f2_copt(mu,Hinv1)
-            g_copt = tomodata.f1_copt(e,lbd,Hinv1)
+            h_copt = tomodata.f2_copt(mu)
+            g_copt = tomodata.f1_copt(e,lbd)
     
             cb_adatos_vm_ls = cp.utils.Trace()
             adatos_avm_ls   = cp.minimize_three_split(f_grad,np.zeros(n), h_copt.prox,g_copt.prox,step_size=tomo_stepsize, max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,barrier=mu,Hinv=Hinv1,line_search=True, #stablized BB
@@ -82,8 +82,8 @@ if __name__ == "__main__":
             #2. VM : BB3 version
             mu     = np.array(1.e-6)
             Hinv1  = np.ones(n)
-            h_copt = tomodata.f2_copt(mu,Hinv1)
-            g_copt = tomodata.f1_copt(e,lbd,Hinv1)
+            h_copt = tomodata.f2_copt(mu)
+            g_copt = tomodata.f1_copt(e,lbd)
     
             cb_adatos_vm = cp.utils.Trace()
             adatos_avm   = cp.minimize_three_split(f_grad,np.zeros(n), h_copt.prox,g_copt.prox,step_size=tomo_stepsize, max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,barrier=mu,Hinv=Hinv1,line_search=False, #stablized BB
@@ -98,8 +98,8 @@ if __name__ == "__main__":
             #3. VM : BB-N version
             mu     = np.array(1.e-6)
             Hinv1  = np.ones(n)
-            h_copt = tomodata.f2_copt(mu,Hinv1)
-            g_copt = tomodata.f1_copt(e,lbd,Hinv1)
+            h_copt = tomodata.f2_copt(mu)
+            g_copt = tomodata.f1_copt(e,lbd)
     
             cb_adatos_vmn = cp.utils.Trace()
             adatos_avmn   = cp.minimize_three_split(f_grad,np.zeros(n), h_copt.prox,g_copt.prox,step_size=tomo_stepsize, max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,barrier=mu,Hinv=Hinv1,line_search=False, #stablized BB
@@ -114,8 +114,8 @@ if __name__ == "__main__":
             #4. VM : MM version
             mu     = np.array(1.e-6)
             Hinv1  = np.ones(n)
-            h_copt = tomodata.f2_copt(mu,Hinv1)
-            g_copt = tomodata.f1_copt(e,lbd,Hinv1)
+            h_copt = tomodata.f2_copt(mu)
+            g_copt = tomodata.f1_copt(e,lbd)
     
             cb_adatos_mm = cp.utils.Trace()
             adatos_mm    = cp.minimize_three_split(f_grad,np.zeros(n), h_copt.prox,g_copt.prox,step_size=tomo_stepsize, max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,barrier=mu,Hinv=Hinv1,line_search=False,vm_type=2,
@@ -127,10 +127,10 @@ if __name__ == "__main__":
             tomo_MM_time.append(cb_adatos_mm.trace_time)
             out_tomo.append(adatos_mm.x.reshape(int(math.sqrt(n)),int(math.sqrt(n))))
              
-            #5. A : ATOS without variable metric (ie, Identity for Hinv)
+            #5. A : ATOS
             mu = np.array(1.e-6)
-            h_copt = tomodata.f2_copt(mu,1)
-            g_copt = tomodata.f1_copt(e,lbd,1)
+            h_copt = tomodata.f2_copt(mu)
+            g_copt = tomodata.f1_copt(e,lbd)
     
             cb_adatos = cp.utils.Trace()
             adatos_a  = cp.minimize_three_split(f_grad,np.zeros(n), h_copt.prox,g_copt.prox,step_size=tomo_stepsize, max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,barrier=mu,callback=cb_adatos)
@@ -141,10 +141,10 @@ if __name__ == "__main__":
             tomo_A_time.append(cb_adatos.trace_time)
             out_tomo.append(adatos_a.x.reshape(int(math.sqrt(n)),int(math.sqrt(n))))
 
-            #6. TOS : TOS without variable metric (ie, Identity for Hinv)
+            #6. TOS
             mu     = np.array(1.e-6)
-            h_copt = tomodata.f2_copt(mu,1)
-            g_copt = tomodata.f1_copt(e,lbd,1)
+            h_copt = tomodata.f2_copt(mu)
+            g_copt = tomodata.f1_copt(e,lbd)
     
             cb_tos = cp.utils.Trace()
             adatos_tos = cp.minimize_three_split(f_grad,np.zeros(n), h_copt.prox,g_copt.prox,step_size=tomo_stepsize, max_iter=max_iter, tol=1.e-6,barrier=mu,callback=cb_tos,line_search=False)
@@ -192,8 +192,8 @@ if __name__ == "__main__":
 
             #1. VM - BB method
             Hinv = np.ones(n_features_ls)
-            G1 = cp.penalty.GroupL1(beta, groups_ls[::2], Hinv)
-            G2 = cp.penalty.GroupL1(beta, groups_ls[1::2], Hinv)
+            G1 = cp.penalty.GroupL1(beta, groups_ls[::2])
+            G2 = cp.penalty.GroupL1(beta, groups_ls[1::2])
             cb_adatos_vm = cp.utils.Trace()
             adatos_avm   = cp.minimize_three_split(f_ls.f_grad,np.zeros(n_features_ls), G1.prox,G2.prox,step_size=10*ls_stepsize,max_iter=max_iter, tol=1.e-6,h_Lipschitz=beta,line_search=False, #Stab BB
                                                    vm_type=1,Hinv=Hinv,callback=cb_adatos_vm)
@@ -204,23 +204,9 @@ if __name__ == "__main__":
             ls_AVM_time.append(cb_adatos_vm.trace_time)
             out_ls.append(adatos_avm.x)
 
-            #2. VM - MM method
-            Hinv = np.ones(n_features_ls)
-            G1 = cp.penalty.GroupL1(beta, groups_ls[::2], Hinv)
-            G2 = cp.penalty.GroupL1(beta, groups_ls[1::2], Hinv)
-            cb_adatos_mm = cp.utils.Trace()
-            adatos_mm   = cp.minimize_three_split(f_ls.f_grad,np.zeros(n_features_ls), G1.prox,G2.prox,step_size=10*ls_stepsize,max_iter=max_iter, tol=1.e-6,h_Lipschitz=beta,line_search=False,
-                                                   vm_type=2,Hinv=Hinv,callback=cb_adatos_mm)
-
-            trace_obj = None
-            trace_obj = [overlapping_group_lasso.loss(x, f_ls, G1, G2) for x in cb_adatos_mm.trace_x]
-            ls_MM_obj.append(trace_obj)
-            ls_MM_time.append(cb_adatos_mm.trace_time)
-            out_ls.append(adatos_mm.x)
-    
-            #3. A : ATOS without variable metric (ie, Identity for Hinv)
-            G1 = cp.penalty.GroupL1(beta, groups_ls[::2], e)
-            G2 = cp.penalty.GroupL1(beta, groups_ls[1::2], e)
+            #2. A : ATOS
+            G1 = cp.penalty.GroupL1(beta, groups_ls[::2])
+            G2 = cp.penalty.GroupL1(beta, groups_ls[1::2])
             cb_adatos = cp.utils.Trace()
             adatos_a  = cp.minimize_three_split(f_ls.f_grad,np.zeros(n_features_ls), G1.prox,G2.prox,step_size=10*ls_stepsize, max_iter=max_iter,tol=1.e-6,h_Lipschitz=beta,callback=cb_adatos)
     
@@ -230,9 +216,9 @@ if __name__ == "__main__":
             ls_A_time.append(cb_adatos.trace_time)
             out_ls.append(adatos_a.x)
     
-            #4. TOS : TOS without variable metric (ie, Identity for Hinv)
-            G1 = cp.penalty.GroupL1(beta, groups_ls[::2], e)
-            G2 = cp.penalty.GroupL1(beta, groups_ls[1::2], e)
+            #3. TOS
+            G1 = cp.penalty.GroupL1(beta, groups_ls[::2])
+            G2 = cp.penalty.GroupL1(beta, groups_ls[1::2])
             cb_tos = cp.utils.Trace()
             adatos_tos = cp.minimize_three_split(f_ls.f_grad,np.zeros(n_features_ls), G1.prox,G2.prox,step_size=ls_stepsize, max_iter=max_iter, tol=1.e-6,callback=cb_tos,line_search=False)
     
@@ -243,7 +229,6 @@ if __name__ == "__main__":
             out_ls.append(adatos_tos.x)
     
             ax[0,i].plot(ls_AVM_time[i],  ls_AVM_obj[i], label='VM-SBB')
-            ax[0,i].plot(ls_MM_time[i],  ls_MM_obj[i], label='VM-MM')
             ax[0,i].plot(ls_A_time[i],    ls_A_obj[i], label='A')
             ax[0,i].plot(ls_TOS_time[i],  ls_TOS_obj[i], label='TOS')
             ax[0,i].set_yscale('log')
@@ -251,7 +236,6 @@ if __name__ == "__main__":
             ax[0,i].legend()
 
             ax[1,i].plot( ls_AVM_obj[i], label='VM-SBB')
-            ax[1,i].plot( ls_MM_obj[i], label='VM-MM')
             ax[1,i].plot(ls_A_obj[i], label='A')
             ax[1,i].plot(ls_TOS_obj[i], label='TOS')
             ax[1,i].set_yscale('log')
@@ -286,12 +270,11 @@ if __name__ == "__main__":
 
         f,ax = plt.subplots(1, 2, sharey=False)
 
-
         #1. VM - BB-LS
         mu = np.array(1.e-6)
         f_opt = sampledata.f_copt(n,k1,k2)
-        g_opt = tomodata.f1_copt(e,lbd,Hinv)
-        h_opt = tomodata.f2_copt(mu,Hinv)
+        g_opt = tomodata.f1_copt(e,lbd)
+        h_opt = tomodata.f2_copt(mu)
         step_size = 2/f_opt.Lip()
         cb_adatos_vm_ls = cp.utils.Trace()
         adatos_avm_ls   = cp.minimize_three_split(f_opt.f_grad,np.zeros(2*n), h_opt.prox,g_opt.prox,step_size=step_size,max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,line_search=True,
@@ -307,8 +290,8 @@ if __name__ == "__main__":
         mu = np.array(1.e-6)
         Hinv = np.ones(2*n)
         f_opt = sampledata.f_copt(n,k1,k2)
-        g_opt = tomodata.f1_copt(e,lbd,Hinv)
-        h_opt = tomodata.f2_copt(mu,Hinv)
+        g_opt = tomodata.f1_copt(e,lbd)
+        h_opt = tomodata.f2_copt(mu)
         step_size = 2/f_opt.Lip()
         cb_adatos_vm = cp.utils.Trace()
         adatos_avm   = cp.minimize_three_split(f_opt.f_grad,np.zeros(2*n), h_opt.prox,g_opt.prox,step_size=step_size,max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,line_search=False, #Stab BB
@@ -324,8 +307,8 @@ if __name__ == "__main__":
         mu = np.array(1.e-6)
         Hinv = np.ones(2*n)
         f_opt = sampledata.f_copt(n,k1,k2)
-        g_opt = tomodata.f1_copt(e,lbd,Hinv)
-        h_opt = tomodata.f2_copt(mu,Hinv)
+        g_opt = tomodata.f1_copt(e,lbd)
+        h_opt = tomodata.f2_copt(mu)
         cb_adatos_vmn = cp.utils.Trace()
         adatos_avmn   = cp.minimize_three_split(f_opt.f_grad,np.zeros(2*n), h_opt.prox,g_opt.prox,step_size=step_size,max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,line_search=False, #Stab BB
                                                vm_type=1,barrier=mu,Hinv= Hinv,sbb_n=10,callback=cb_adatos_vmn)
@@ -340,8 +323,8 @@ if __name__ == "__main__":
         mu = np.array(1.e-6)
         Hinv = np.ones(2*n)
         f_opt = sampledata.f_copt(n,k1,k2)
-        g_opt = tomodata.f1_copt(e,lbd,Hinv)
-        h_opt = tomodata.f2_copt(mu,Hinv)
+        g_opt = tomodata.f1_copt(e,lbd)
+        h_opt = tomodata.f2_copt(mu)
         cb_adatos_mm = cp.utils.Trace()
         adatos_mm   = cp.minimize_three_split(f_opt.f_grad,np.zeros(2*n), h_opt.prox,g_opt.prox,step_size=step_size,max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,line_search=False, #Stab BB
                                                vm_type=2,barrier=mu,Hinv= Hinv,callback=cb_adatos_mm)
@@ -354,8 +337,8 @@ if __name__ == "__main__":
     
         #5. A : ATOS
         mu    = np.array(1.e-6)
-        g_opt = tomodata.f1_copt(e,lbd,1)
-        h_opt = tomodata.f2_copt(mu,1)
+        g_opt = tomodata.f1_copt(e,lbd)
+        h_opt = tomodata.f2_copt(mu)
         step_size = 2/f_opt.Lip()
         cb_adatos = cp.utils.Trace()
         adatos_a  = cp.minimize_three_split(f_opt.f_grad,np.zeros(2*n), h_opt.prox,g_opt.prox,step_size=step_size,max_iter=max_iter, tol=1.e-6,h_Lipschitz=lbd,barrier=mu,callback=cb_adatos)
@@ -368,8 +351,8 @@ if __name__ == "__main__":
     
         #4. TOS : TOS
         mu    = np.array(1.e-6)
-        g_opt = tomodata.f1_copt(e,lbd,1)
-        h_opt = sampledata.h_copt(mu,1)
+        g_opt = tomodata.f1_copt(e,lbd)
+        h_opt = sampledata.h_copt(mu)
         step_size = 2/f_opt.Lip()
 
         cb_tos = cp.utils.Trace()
@@ -407,7 +390,6 @@ if __name__ == "__main__":
         pdb.set_trace()
 
     #Portfolio Optimization
-    #TODO Fix Simplex Proj to work with H
     if flag4 == '1':
         Sigma, port_r, port_m, port_gt, port_eval  = portfoliodata.generate_data()
 
@@ -421,7 +403,7 @@ if __name__ == "__main__":
         n_features_port = 1000
         Hinv = np.ones(n_features_port)
         e = np.ones(n_features_port)
-        f_copt        = portfoliodata.f1_copt(Hinv,Sigma)
+        f_copt        = portfoliodata.f1_copt(Sigma)
         f_grad        = f_copt.f_grad
 
         f,ax = plt.subplots(1, 1, sharey=False)
@@ -429,13 +411,13 @@ if __name__ == "__main__":
 
 
         Hinv = np.ones(n_features_port)
-        G1 = portfoliodata.f2_copt(Hinv)
-        G2 = portfoliodata.f3_copt(Hinv,port_r,port_m)
+        G1 = portfoliodata.f2_copt()
+        G2 = portfoliodata.f3_copt(port_r,port_m)
         
         #1. VM-BB
         cb_adatos_vm = cp.utils.Trace()
         adatos_avm   = cp.minimize_three_split(f_copt.f_grad,np.zeros(n_features_port), G1.prox,G2.prox,step_size=port_stepsize,max_iter=max_iter, tol=1.e-6,line_search=False, #Stab BB
-                                               vm_type=1,Hinv=Hinv,total_func = f_copt,callback=cb_adatos_vm)
+                                               vm_type=1,Hinv=Hinv,callback=cb_adatos_vm)
 
         trace_obj = None
         trace_obj = [np.linalg.norm(x-port_gt)/port_gt_norm for x in cb_adatos_vm.trace_x]
@@ -443,20 +425,9 @@ if __name__ == "__main__":
         port_AVM_time.append(cb_adatos_vm.trace_time)
         out_port.append(adatos_avm.x)
 
-        #2. VM-MM
-        cb_adatos_mm = cp.utils.Trace()
-        adatos_mm   = cp.minimize_three_split(f_copt.f_grad,np.zeros(n_features_port), G1.prox,G2.prox,step_size=port_stepsize,max_iter=max_iter, tol=1.e-6,line_search=False, #Stab BB
-                                               vm_type=2,Hinv=Hinv,total_func = f_copt,callback=cb_adatos_mm)
-
-        trace_obj = None
-        trace_obj = [np.linalg.norm(x-port_gt)/port_gt_norm for x in cb_adatos_mm.trace_x]
-        port_MM_obj.append(trace_obj)
-        port_MM_time.append(cb_adatos_mm.trace_time)
-        out_port.append(adatos_mm.x)
-        
-        #3. A 
-        G1 = portfoliodata.f2_copt(1)
-        G2 = portfoliodata.f3_copt(1,port_r,port_m)
+        #2. A 
+        G1 = portfoliodata.f2_copt()
+        G2 = portfoliodata.f3_copt(port_r,port_m)
         cb_atos = cp.utils.Trace()
         adatos_atos = cp.minimize_three_split(f_copt.f_grad,np.zeros(n_features_port), G1.prox,G2.prox,step_size=port_stepsize, max_iter=max_iter, tol=1.e-6,callback=cb_atos)
         trace_obj = None
@@ -465,9 +436,9 @@ if __name__ == "__main__":
         port_A_time.append(cb_atos.trace_time)
         out_port.append(adatos_atos.x)
 
-        #4. TOS 
-        G1 = portfoliodata.f2_copt(1)
-        G2 = portfoliodata.f3_copt(1,port_r,port_m)
+        #3. TOS 
+        G1 = portfoliodata.f2_copt()
+        G2 = portfoliodata.f3_copt(port_r,port_m)
         cb_tos = cp.utils.Trace()
         adatos_tos = cp.minimize_three_split(f_copt.f_grad,np.zeros(n_features_port), G1.prox,G2.prox,step_size=port_stepsize, max_iter=max_iter, tol=1.e-6,callback=cb_tos,line_search=False)
         trace_obj = None
@@ -477,7 +448,6 @@ if __name__ == "__main__":
         out_port.append(adatos_tos.x)
 
         ax.plot(port_AVM_obj[0], label='VM-SBB')
-        ax.plot(port_MM_obj[0], label='VM-MM')
         ax.plot(port_A_obj[0], label='A')
         ax.plot(port_TOS_obj[0], label='TOS')
         ax.set_yscale('log')

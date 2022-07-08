@@ -23,19 +23,14 @@ def generate_data():
     return F,b,GT
 
 class f1_copt:
-    def __init__(self, e, lbd, H):
+    def __init__(self, e, lbd):
         self.e = e
-        self.H = H
         self.lbd = lbd
     def __call__(self,x):
         return self.f_grad(x,return_gradient=False)
     def prox(self,x, step_size):
         step_size = np.real(step_size)
-#        out = x - (1/self.H)*self.lbd*step_size*self.e
-        if self.H is None or isinstance(self.H,int):
-            out = x - step_size*self.lbd*self.e
-        else:
-            out = x - (1/self.H)*self.lbd*self.e
+        out = x - step_size*self.lbd*self.e
         return np.ravel(out)
     def f_grad(self,x,return_gradient=True):
         fval = self.lbd*np.dot(self.e,x)
@@ -46,17 +41,13 @@ class f1_copt:
         return fval, out
 
 class f2_copt:
-    def __init__(self, mu, H):
+    def __init__(self, mu):
         self.mu = mu
-        self.H  = H
     def __call__(self,x):
         return self.f_grad(x,return_gradient=False)
     def prox(self,x, step_size):
         step_size = np.real(step_size)
-        if type(self.H) is int:
-            out = (x + np.sqrt(x**2 + 4*self.mu*step_size*(1/self.H)))/2
-        else:
-            out = (x + np.sqrt(x**2 + 4*self.mu*(1/self.H)))/2
+        out = (x + np.sqrt(x**2 + 4*self.mu*step_size))/2
         return np.ravel(out)
     def f_grad(self,x,return_gradient=True):
         fval = -self.mu*np.sum(np.log(x))
@@ -73,13 +64,6 @@ class f3_copt:
         self.FTb = FTb
     def __call__(self,x):
         return self.f_grad(x,return_gradient=False)
-#    def prox(self,x, step_size): TODO prox not needed, not computing FTF
-#        [n,n] = self.FTF.shape
-#        QQI = self.FTF + (1/step_size)*eye(n)
-#        rhs = self.FTb + x/step_size
-#        out = sp.sparse.linalg.cg(QQI,rhs,atol=0.)
-#        out = out[0]
-#        return np.ravel(out)
     def f_grad(self,x, return_gradient=True):
         Fx = self.F @ x
         fval = 0.5*norm(Fx-self.b)**2

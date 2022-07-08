@@ -80,14 +80,13 @@ class g_copt:
         return fval, self.c
 
 class h_copt:
-    def __init__(self, mu, H):
+    def __init__(self, mu):
         self.mu = mu
-        self.H  = H
     def __call__(self,x):
         return self.f_grad(x,return_gradient=False)
     def prox(self,x, step_size):
         step_size = np.real(step_size)
-        out = (x + np.sqrt(x**2 + 4*self.mu*step_size*self.H))/2
+        out = (x + np.sqrt(x**2 + 4*self.mu*step_size))/2
         return np.ravel(out)
     def f_grad(self,x,return_gradient=True):
         fval = -self.mu*np.sum(np.log(x))
