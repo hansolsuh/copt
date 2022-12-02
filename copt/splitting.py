@@ -9,9 +9,12 @@ from collections import deque
 
 from . import utils
 
-def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv):
+def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv,ck,Hinv_old_min,Hinv_old_max):
     n = Hinv.size
     param = (sk*yk+mu*Hinv)/(sk*sk+mu)
+    if ck is not None:
+        a_bb1 = min(a_bb1,(1+ck)/Hinv_old_min)
+        a_bb2 = max(a_bb2,1/((1+ck)*Hinv_old_max))
     for i in range(0,n):
         if param[i] < (1/a_bb1) and a_bb1 >= 0:
             Hinv[i] = (1/a_bb1)
@@ -41,6 +44,8 @@ def minimize_three_split(
     total_func=None,
     vm_type=None,
     sbb_n=None,
+    ck=None,
+    sigma=1,
     args_prox=(),
 ):
 
@@ -114,6 +119,12 @@ def minimize_three_split(
       sbb_n : int, optional
         Chooses option for stabilized Barzilai-Borwein Delta. None, or 0, which is default, is min(\|s_1\|,\|s_2\|,\|s_3\|), and
         any other number would be length of queue for min(\|s_i\|,...,\|s_{i-n}\|)
+
+      ck : float, optional
+        Bounds (1/(1+ck))Hinv_old \preceq Hinv \preceq (1+ck)Hinv for bounded VM.
+
+      sigma : float, optional
+        Curvature parameter for VM sufficient decrease check.
 
     Returns:
       res : OptimizeResult
@@ -215,7 +226,8 @@ def minimize_three_split(
         nm_bt_dq.append(fk)
 
         if VM_trigger and it > 1:
-            sk = x - x_old
+#            sk = x - x_old
+            sk = z - z_old
             yk = grad_fk - grad_fk_old
             sy = dot(sk,yk)
             ss = dot(sk,sk)
@@ -270,7 +282,9 @@ def minimize_three_split(
 
             a1_list.append(a_bb1)
             a2_list.append(a_bb2)
-            Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
+            Hinv_old_min = np.min(Hinv)
+            Hinv_old_max = np.max(Hinv)
+            Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv,ck,Hinv_old_min,Hinv_old_max)
             Hinv_avglist.append(np.average(Hinv))
 
         x_old = x
@@ -288,7 +302,7 @@ def minimize_three_split(
         if ls:
             for it_ls in range(max_iter_backtracking):
                 if VM_trigger and it > 1:
-                    tmp = incr.dot(incr*Hinv)
+                    tmp = sigma*incr.dot(incr*Hinv)
                     rhs = np.max(nm_bt_dq) + grad_fk.dot(incr) + 0.5*tmp
                 else:
                     rhs = fk + grad_fk.dot(incr) + (norm_incr ** 2) / (2 * step_size)
