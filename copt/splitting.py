@@ -9,21 +9,30 @@ from collections import deque
 
 from . import utils
 
-def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv,ck,Hinv_old_min,Hinv_old_max):
+def Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv,rho,it):
+
+    if rho is not None:
+        C_rt = 1+ rho/((it+1)*(1+np.log(it+1)))
+
     n = Hinv.size
     param = (sk*yk+mu*Hinv)/(sk*sk+mu)
-    print(ck)
-    if ck is not None:
-        a_bb1 = min(a_bb1,(1+ck)/Hinv_old_min)
-        a_bb2 = max(a_bb2,1/((1+ck)*Hinv_old_max))
     for i in range(0,n):
-        if param[i] < (1/a_bb1) and a_bb1 >= 0:
-            Hinv[i] = (1/a_bb1)
-        elif param[i] > (1/a_bb2) and a_bb2 >=0:
-            Hinv[i] = (1/a_bb2)
+        if rho is not None:
+            temp1 = max((1/a_bb1),(1/C_rt)*Hinv[i])
+            temp2 = min((1/a_bb2),C_rt*Hinv[i])
+        else:
+            temp1 = 1/a_bb1
+            temp2 = 1/a_bb2
+
+        if param[i] < temp1 and a_bb1 >= 0:
+            Hinv[i] = temp1
+        elif param[i] > temp2 and a_bb2 >=0:
+            Hinv[i] = temp2
         else:
             Hinv[i] = param[i]
     return;
+
+
 
 def minimize_three_split(
     f_grad,
@@ -45,7 +54,6 @@ def minimize_three_split(
     total_func=None,
     vm_type=None,
     sbb_n=None,
-    ck=None,
     sigma=1,
     rho=None,
     args_prox=(),
@@ -121,9 +129,6 @@ def minimize_three_split(
       sbb_n : int, optional
         Chooses option for stabilized Barzilai-Borwein Delta. None, or 0, which is default, is min(\|s_1\|,\|s_2\|,\|s_3\|), and
         any other number would be length of queue for min(\|s_i\|,...,\|s_{i-n}\|)
-
-      ck : float, optional
-        Bounds (1/(1+ck))Hinv_old \preceq Hinv \preceq (1+ck)Hinv for bounded VM.
 
       sigma : float, optional
         Curvature parameter for VM sufficient decrease check.
@@ -284,27 +289,7 @@ def minimize_three_split(
 
             a1_list.append(a_bb1)
             a2_list.append(a_bb2)
-            Hinv_old_min = np.min(Hinv)
-            Hinv_old_max = np.max(Hinv)
-            if rho is not None:
-                C_rt = 1+ rho/((it+1)*(1+np.log(it+1)))
-                n = Hinv.size
-                param = (sk*yk+mu*Hinv)/(sk*sk+mu)
-                for i in range(0,n):
-                    if param[i] < max((1/a_bb1),(1/C_rt)*Hinv[i]) and a_bb1 >= 0:
-                        Hinv[i] = max((1/a_bb1),(1/C_rt)*Hinv[i])
-                    elif param[i] > min((1/a_bb2),C_rt*Hinv[i]) and a_bb2 >=0:
-                        Hinv[i] = min((1/a_bb2),C_rt*Hinv[i])
-                    else:
-                        Hinv[i] = param[i]
-#                Hcalc = (sk*yk+mu*Hinv)/(sk*sk+mu)
-#                upbound  = np.minimum(1/a_bb2, C_rt*Hinv)
-#                lowbound = np.maximum(1/a_bb1, (1/C_rt)*Hinv)
-#                Hcalc = np.maximum(lowbound,Hcalc)
-#                Hcalc = np.minimum(upbound,Hcalc)
-#                print("bb lo {}, bb hi {} joint_lo {}, joint_hi{}".format(1/a_bb1,1/a_bb2,lowbound.min(), upbound.max()))
-            else:
-                Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv,ck,Hinv_old_min,Hinv_old_max)
+            Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv,rho,it)
             Hinv_avglist.append(np.average(Hinv))
 
         x_old = x
