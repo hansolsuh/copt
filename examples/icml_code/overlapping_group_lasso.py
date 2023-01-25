@@ -16,7 +16,6 @@ from sklearn import preprocessing
 
 import copt.loss
 import copt.penalty
-from libsvm.svmutil import *
 
 def generate_data():
     np.random.seed(0)
