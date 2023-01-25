@@ -15,21 +15,26 @@ If one already has copt installed, then using virtualenv would be recommended to
 
     cd PROJECTPATH
     virtualenv venv
-    source ./venv/bin/active
+    source ./venv/bin/activate
+    pip3 install numpy==1.23.4
+    pip3 install scikit-learn==1.1.3
+    pip3 install matplotlib==3.6.2
     pip3 install /PATH/copt
 
+This project uses numpy version of 1.23.4, and sklearn version of 1.1.3.
 
 Running the code
 ================
 
 To run the code after the installation, the user simply needs to run following file with certain input arguments::
 
-    python3 examples/icml_code/vmatos.py 1 1 1 1
+    cd examples/icml_code
+    python3 vmatos.py 1 1 1 1
 
 There are total of four numerical experiments, and four input arguments represent binary trigger for the respective experiments. 
 If one wants to not run a certain experiment, say third, the modified command would be::
 
-    python3 examples/icml_code/vmatos.py 1 1 0 1
+    python3 vmatos.py 1 1 0 1
     
-This command will generate series of pyplot plots.
+This command will generate series of pyplot plots. Note that the python command needs to be executed inside icml_code folder.
 
