@@ -133,6 +133,9 @@ def minimize_three_split(
       sigma : float, optional
         Curvature parameter for VM sufficient decrease check.
 
+      rho : float, optional
+        Metric closeness parameter, \geq 0.  
+
     Returns:
       res : OptimizeResult
         The optimization result represented as a
@@ -352,7 +355,6 @@ def minimize_three_split(
                 break
    
         if it > 0 and certificate < tol:
-            #TODO barrier with callback func while using the logger??
             if barrier != None:
                 if barrier > 1.e-12:
                     barrier /= 1.1
