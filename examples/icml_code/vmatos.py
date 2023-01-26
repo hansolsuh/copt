@@ -171,7 +171,7 @@ if __name__ == "__main__":
         f,ax = plt.subplots(1, len(all_betas), sharey=False)
 
         sigma = 0.99
-        rho = 10000
+        rho = 1
         for i, beta in enumerate(all_betas):
             print('beta = %s' % beta)
 
