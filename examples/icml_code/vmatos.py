@@ -159,8 +159,8 @@ if __name__ == "__main__":
         A_ls,b_ls,f_ls,groups_ls,GT_ls,n_features_ls,ls_stepsize = overlapping_group_lasso.generate_data()
 
         all_betas = np.logspace(-4, -3, 2)
-        ls_AVM_obj,  ls_A_obj,  ls_VM_obj,  ls_TOS_obj,  = [],[],[],[]
-        ls_AVM_time, ls_A_time, ls_VM_time, ls_TOS_time, = [],[],[],[]
+        ls_VMLS_obj,  ls_AVM_obj,  ls_A_obj,  ls_VM_obj,  ls_TOS_obj,  = [],[],[],[],[]
+        ls_VMLS_time, ls_AVM_time, ls_A_time, ls_VM_time, ls_TOS_time, = [],[],[],[],[]
     
         out_ls = []
 
@@ -174,6 +174,20 @@ if __name__ == "__main__":
         rho = 10000
         for i, beta in enumerate(all_betas):
             print('beta = %s' % beta)
+
+            #0. VM - BB-LS method
+            Hinv = np.ones(n_features_ls)
+            G1 = cp.penalty.GroupL1(beta, groups_ls[::2] )
+            G2 = cp.penalty.GroupL1(beta, groups_ls[1::2] )
+            cb_adatos_vm_ls = cp.utils.Trace()
+            adatos_avm_ls   = cp.minimize_three_split(f_ls.f_grad,np.zeros(n_features_ls), G1.prox,G2.prox,step_size=10*ls_stepsize,max_iter=max_iter, tol=1.e-6,h_Lipschitz=beta,line_search=True,
+                                                   vm_type=1,Hinv=Hinv,callback=cb_adatos_vm_ls, sigma=sigma, rho=rho)
+
+            trace_obj = None
+            trace_obj = [overlapping_group_lasso.loss(x, f_ls, G1, G2) for x in cb_adatos_vm_ls.trace_x]
+            ls_VMLS_obj.append(trace_obj)
+            ls_VMLS_time.append(cb_adatos_vm_ls.trace_time)
+            out_ls.append(adatos_avm_ls.x)
 
             #1. VM - BB method
             Hinv = np.ones(n_features_ls)
@@ -214,6 +228,7 @@ if __name__ == "__main__":
             out_ls.append(adatos_tos.x)
     
             ax[i].set_title("Group Lasso $beta=%s$" % beta)
+            ax[i].plot(ls_VMLS_obj[i], label='VM-LS')
             ax[i].plot( ls_AVM_obj[i], label='VM-SBB')
             ax[i].plot(ls_A_obj[i], label='A')
             ax[i].plot(ls_TOS_obj[i], label='TOS')
@@ -335,8 +350,7 @@ if __name__ == "__main__":
         ax.plot(sample_A_obj[0], label='A')
         ax.plot(sample_TOS_obj[0], label='TOS')
         ax.set_yscale('log')
-        ax.set_xlim(left=0,right=200)
-        ax.set_ylim(top=22,bottom=16.8)
+        ax.set_xlim(left=0)
         ax.legend()
         ax.set_xlabel('Iteration')
         ax.set_ylabel('Objective')
@@ -348,8 +362,8 @@ if __name__ == "__main__":
         Sigma, port_r, port_m, port_gt, port_eval  = portfoliodata.generate_data()
 
         all_betas = np.logspace(-4, -2, 3)
-        port_AVM_obj,  port_A_obj,  port_TOS_obj,  port_APDHG_obj,  port_PDHG_obj  = [],[],[],[],[]
-        port_AVM_time, port_A_time, port_TOS_time, port_APDHG_time, port_PDHG_time = [],[],[],[],[]
+        port_VMLS_obj,  port_AVM_obj,  port_A_obj,  port_TOS_obj,  port_APDHG_obj,  port_PDHG_obj  = [],[],[],[],[],[]
+        port_VMLS_time, port_AVM_time, port_A_time, port_TOS_time, port_APDHG_time, port_PDHG_time = [],[],[],[],[],[]
     
         out_port = []
         port_gt_norm = np.linalg.norm(port_gt)
@@ -368,6 +382,17 @@ if __name__ == "__main__":
         Hinv = np.ones(n_features_port)
         G1 = portfoliodata.f2_copt(Hinv)
         G2 = portfoliodata.f3_copt(Hinv,port_r,port_m)
+        
+        #0. VM-BBLS
+        cb_adatos_vm_ls = cp.utils.Trace()
+        adatos_avm_ls   = cp.minimize_three_split(f_copt.f_grad,np.zeros(n_features_port), G1.prox,G2.prox,step_size=port_stepsize,max_iter=max_iter, tol=1.e-6,line_search=True, #Stab BB
+                                            vm_type=1,Hinv=Hinv,total_func = f_copt,callback=cb_adatos_vm_ls, sigma=sigma,rho=rho)
+
+        trace_obj = None
+        trace_obj = [np.linalg.norm(x-port_gt)/port_gt_norm for x in cb_adatos_vm_ls.trace_x]
+        port_VMLS_obj.append(trace_obj)
+        port_VMLS_time.append(cb_adatos_vm_ls.trace_time)
+        out_port.append(adatos_avm_ls.x)
         
         #1. VM-BB
         cb_adatos_vm = cp.utils.Trace()
@@ -403,6 +428,7 @@ if __name__ == "__main__":
         out_port.append(adatos_tos.x)
 
         ax.set_title('Portfolio Example')
+        ax.plot(port_VMLS_obj[0], label='VM-LS')
         ax.plot(port_AVM_obj[0], label='VM-SBB')
         ax.plot(port_A_obj[0], label='A')
         ax.plot(port_TOS_obj[0], label='TOS')
@@ -413,3 +439,5 @@ if __name__ == "__main__":
         ax.legend()
 
         plt.show()
+        import pdb
+        pdb.set_trace()
