@@ -2,9 +2,7 @@ import warnings
 import numpy as np
 from numpy.linalg import norm
 from numpy import dot
-from scipy import optimize, linalg, sparse 
-import scipy as sp
-import matplotlib.pyplot as plt
+from scipy import optimize, linalg, sparse
 from collections import deque
 
 from . import utils
@@ -40,8 +38,6 @@ def minimize_three_split(
     hcopt=None,
     Hinv=None,
     total_func=None,
-    anderson_inner=0,
-    anderson_outer=0,
     args_prox=(),
 ):
 
@@ -110,16 +106,6 @@ def minimize_three_split(
       total_func : float, optional
         Evaluate function value of overall problem.
 
-      anderson_inner : int, optional
-        Trigger for Anderson-Acceleration. 0 means off, int>0 means size of memory for AA
-        This for inner part - only acts on gradient part. See Mai and Johansson
-
-      anderson_outer : int, optional
-        Trigger for Anderson-Acceleration. 0 means off, int>0 means size of memory for AA
-        This is for fixed-point of the algorithm as a whole. See Fu,Zhang,Boyd.
-
-
-
     Returns:
       res : OptimizeResult
         The optimization result represented as a
@@ -155,16 +141,8 @@ def minimize_three_split(
             return x
 
 
-    x0_temp = np.copy(x0)
-
     n = x0.size
     VM_trigger = 1
-
-    if anderson_inner is None:
-        anderson_inner = 0
-
-    if anderson_outer is None:
-        anderson_outer = 0
 
     if Hinv is None:
         Hinv = np.ones(n)
@@ -184,28 +162,11 @@ def minimize_three_split(
     x = prox_1(z - step_size * grad_fk, step_size, *args_prox)
     u = np.zeros_like(x)
 
-    if anderson_inner !=0:
-        _,grad_fk_temp = f_grad(x0)
-        aa_yk_inner = x0-step_size*grad_fk_temp
-        aa_rk_inner = x-x0
-        R_aa_inner  = []
-        g_aa_inner  = [] #Stores list of g_k = x_k-step_size*grad_fk
-        aa_rk_inner = np.zeros_like(x0)
-
-    if anderson_outer !=0:
-        _,grad_fk_temp = f_grad(x0)
-        aa_yk_outer = x0-step_size*grad_fk_temp
-        aa_rk_outer = x-x0
-        R_aa_outer  = []
-        g_aa_outer  = [] #Stores list of g_k = x_k-step_size*grad_fk
-        aa_rk_outer = np.zeros_like(x0)
-
     delta = 2
     mu    = 10000
     C     = 10
     r     = 1
 
-    aa_list = []
     a1_list = []
     a2_list = []
     Hinv_avglist = []
@@ -228,44 +189,6 @@ def minimize_three_split(
         bb_stab_delta_ls_trigger = False
 
     for it in range(max_iter):
-
-        aa_mk_inner = min(anderson_inner,it)
-        aa_mk_outer = min(anderson_outer,it)
-        #Anderson for Fixed Point Iteration. Zhang,O'Donoghue,Boyd
-        if anderson_outer != 0:
-            aa_gk_outer     = x #TODO ???
-            aa_rk_outer_old = aa_rk_outer
-            aa_rk_outer     = aa_gk_outer - aa_yk_outer
-            len_R = len(R_aa_outer)
-            if len_R >= aa_mk_outer and len_R != 0:
-                R_aa_outer.pop(0)
-            R_aa_outer.append(aa_rk_outer)
-            temp_aa = np.matmul(np.array(R_aa_outer),np.array(R_aa_outer).T) #R^T*R. TODO QR for resuability
-            one_R = np.ones(len(R_aa_outer))
-            lbd_aa = 1.0 #Regularized version. See Bach, Daspermont, Scieur
-            np.fill_diagonal(temp_aa,temp_aa.diagonal()+lbd_aa)
-            aa_sol = np.linalg.solve(temp_aa,one_R)
-            aa_sol = aa_sol/sum(aa_sol)
-
-            if len(g_aa_outer) >= aa_mk_outer and len(g_aa_outer) != 0:
-                g_aa_outer.pop(0)
-            g_aa_outer.append(aa_gk_outer)
-            y_test = sum([g_aa_outer[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
-            #TODO figure out checkpoint for diag VM
-            #Note: grad_fk is done on zk, but here using x to compare sufficient descent
-            #since we are doing AA only wrt xk. Thus one extra f_grad eval
-            x_test  = prox_1(y_test, step_size, *args_prox)
-            fx_test = f_grad(x_test, return_gradient=False) 
-            fx_old,grad_fk_old = f_grad(x_old)
-            print(fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old)- fz_test)
-            if fz_test <= fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old):
-                print('wwwwwwwwwwwwwwww',it)
-                x           = x_test
-                aa_yk_outer = aa_yk_outer
-            else:
-                z           = prox_1(aa_gk_outer,step_size,*args_prox)
-                aa_yk_outer = aa_gk_outer
-
         grad_fk_old = grad_fk
         fk, grad_fk = f_grad(z)
         nm_bt_dq.append(fk)
@@ -302,50 +225,11 @@ def minimize_three_split(
             Hcalc(a_bb1,a_bb2,sk,yk,mu,Hinv)
             Hinv_avglist.append(np.average(Hinv))
 
-        #Mai-Johnson way. Doing AA on gradient term only as g,h may not have full domain?
-        if anderson_inner != 0:
-            aa_gk_inner     = z - step_size*(u+grad_fk)
-            aa_rk_inner_old = aa_rk_inner
-            aa_rk_inner     = aa_gk_inner - aa_yk_inner
-            len_R = len(R_aa_inner)
-            if len_R >= aa_mk_inner and len_R != 0:
-                R_aa_inner.pop(0)
-            R_aa_inner.append(aa_rk_inner)
-            temp_aa = np.matmul(np.array(R_aa_inner),np.array(R_aa_inner).T) #R^T*R. TODO QR for resuability
-            one_R = np.ones(len(R_aa_inner))
-            lbd_aa = 1.0 #Regularized version. See Bach, Daspermont, Scieur
-            np.fill_diagonal(temp_aa,temp_aa.diagonal()+lbd_aa)
-            aa_sol = np.linalg.solve(temp_aa,one_R)
-            aa_sol = aa_sol/sum(aa_sol)
-
-            if len(g_aa_inner) >= aa_mk_inner and len(g_aa_inner) != 0:
-                g_aa_inner.pop(0)
-            g_aa_inner.append(aa_gk_inner)
-            y_test = sum([g_aa_inner[i]*val for i,val in enumerate(aa_sol)]) #TODO Non-built-in sum? python too slow?
-
         x_old = x
-
-        if anderson_inner == 0:
-            if VM_trigger and it > 1:
-                x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
-            else:
-                x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
+        if VM_trigger and it > 1:
+            x = prox_1(z - (1/Hinv) *  (u + grad_fk), 1, *args_prox)
         else:
-            #TODO figure out checkpoint for diag VM
-            #Note: grad_fk is done on zk, but here using x to compare sufficient descent
-            #since we are doing AA only wrt xk. Thus one extra f_grad eval
-            x_test  = prox_1(y_test, step_size, *args_prox)
-            fx_test = f_grad(x_test, return_gradient=False) 
-            fx_old,grad_fk_old = f_grad(x_old)
-            print(fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old)- fz_test)
-            if fz_test <= fx_old - (step_size/2.)* np.dot(grad_fk_old,grad_fk_old):
-                print('wwwwwwwwwwwwwwww',it)
-                x           = x_test
-                aa_yk_inner = aa_yk_inner
-            else:
-                z           = prox_1(aa_gk_inner,step_size,*args_prox)
-                aa_yk_inner = aa_gk_inner
-
+            x = prox_1(z - step_size *  (u + grad_fk), step_size, *args_prox)
 
         incr = x - z
         norm_incr = np.linalg.norm(incr)
@@ -411,7 +295,6 @@ def minimize_three_split(
             if barrier != None:
                 if barrier > 1.e-12:
                     barrier /= 1.1
-                    #print("it, barrier :", it,barrier)
                 else:
                     success = True
                     break
