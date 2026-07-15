@@ -162,7 +162,8 @@ class Trace:
             delta = (datetime.now() - self.start).total_seconds()
             self.trace_time.append(delta)
             self.trace_step_size.append(dl["step_size"])
-            self.trace_fx.append(dl["fk"])
+            if self.f is None and "fk" in dl:
+                self.trace_fx.append(dl["fk"])
 
             if dl.get("VM_trigger") is not None:
                 self.trace_Hinv.append(dl["Hinv"].copy())
@@ -207,5 +208,4 @@ def get_max_lipschitz(A, loss, alpha=0):
     elif loss in ("huber", "square"):
         raise NotImplementedError
     raise NotImplementedError
-
 

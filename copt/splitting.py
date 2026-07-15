@@ -216,8 +216,8 @@ def minimize_three_split(
     nm_bt =5 #Size of deque for non-monotonic linesearch
     nm_bt_dq = deque(nm_bt*[0],nm_bt)
 
-    bb_stab_delta = np.infty
-    norm_sk = np.infty
+    bb_stab_delta = np.inf
+    norm_sk = np.inf
 
     if VM_trigger and not line_search:        
         bb_stab_delta_ls_trigger = True

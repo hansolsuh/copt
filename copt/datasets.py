@@ -242,7 +242,7 @@ def load_url(md5_check=True):
     X_indptr = np.load(data_indptr)
     X = sparse.csr_matrix((X_data, X_indices, X_indptr))
     y = np.load(data_target)
-    y = ((y + 1) // 2).astype(np.int)
+    y = ((y + 1) // 2).astype(int)
     return X, y
 
 
@@ -404,7 +404,7 @@ def load_kdd12(md5_check=True, verbose=0):
     X_indptr = np.load(data_indptr)
     X = sparse.csr_matrix((X_data, X_indices, X_indptr))
     y = np.load(data_target)
-    y = ((y + 1) // 2).astype(np.int)
+    y = ((y + 1) // 2).astype(int)
     return X, y
 
 

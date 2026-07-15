@@ -16,7 +16,7 @@ class L1Norm:
 
     """
 
-    def __init__(self, alpha, H):
+    def __init__(self, alpha, H=None):
         self.alpha = alpha
         if H is None:
             self.H = 1
@@ -73,7 +73,7 @@ class GroupL1:
 
     """
 
-    def __init__(self, alpha, groups, H):
+    def __init__(self, alpha, groups, H=None):
         self.alpha = alpha
         # groups need to be increasing
         for i, g in enumerate(groups):
@@ -96,7 +96,10 @@ class GroupL1:
 
             norm = np.linalg.norm(x[g])
             if norm > self.alpha * step_size:
-                out[g] -= step_size * self.alpha * out[g] * (1/self.H[g]) / norm
+                if np.isscalar(self.H):
+                    out[g] -= step_size * self.alpha * out[g] / norm
+                else:
+                    out[g] -= step_size * self.alpha * out[g] * (1/self.H[g]) / norm
             else:
                 out[g] = 0
         return out
@@ -260,7 +263,7 @@ class TraceNorm:
 
     is_separable = False
 
-    def __init__(self, alpha, shape,H):
+    def __init__(self, alpha, shape, H=None):
         assert len(shape) == 2
         self.shape = shape
         self.alpha = alpha
